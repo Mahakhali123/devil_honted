@@ -1,0 +1,15 @@
+# Godot 4 import cache.
+# Rebuilt automatically when the project is opened. Contains imported copies
+# of every asset plus UID caches - hundreds of MB, and machine-specific.
+.godot/
+
+# Godot's export staging area (build/web IS committed on purpose - Vercel
+# deploys straight out of it, so it must be in the repo).
+build/*
+!build/web/
+!build/web/**
+
+# OS junk
+Thumbs.db
+desktop.ini
+.DS_Store

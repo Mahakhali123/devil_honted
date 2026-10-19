@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Haunted Kingdom: Ghost Hunter — Character Studio</title>
+<style>
+  :root{
+    --blood:#8e1113; --gold:#c9a227; --ghost:#9fe8ff; --ink:#08080c;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--ink);
+    font-family:"Georgia","Times New Roman",serif;color:#d8d2c4}
+  canvas{display:block}
+  #ui{position:fixed;inset:0;pointer-events:none;z-index:10}
+  .panel{position:absolute;pointer-events:auto;background:rgba(10,8,12,.78);
+    border:1px solid rgba(201,162,39,.35);border-radius:6px;padding:12px 14px;
+    backdrop-filter:blur(6px);box-shadow:0 8px 30px rgba(0,0,0,.7)}
+  #title{top:14px;left:14px;max-width:330px}
+  #title h1{margin:0 0 2px;font-size:17px;letter-spacing:2px;color:#e7cd6a;
+    text-transform:uppercase;text-shadow:0 0 14px rgba(201,162,39,.5)}
+  #title .sub{font-size:11px;letter-spacing:3px;color:#9a8f76;text-transform:uppercase}
+  #title .note{font-size:11px;line-height:1.5;color:#8d8577;margin-top:8px}
+  #roster{top:14px;right:14px;width:250px}
+  #roster h2{margin:0 0 8px;font-size:11px;letter-spacing:2px;color:#9a8f76;text-transform:uppercase}
+  .ghostbtn{display:block;width:100%;text-align:left;margin:5px 0;padding:8px 10px;
+    background:rgba(30,22,26,.85);border:1px solid rgba(201,162,39,.22);border-radius:4px;
+    color:#cfc6b4;font-family:inherit;font-size:12.5px;letter-spacing:1px;cursor:pointer;
+    transition:.16s}
+  .ghostbtn:hover{border-color:var(--gold);background:rgba(60,20,22,.9);color:#fff}
+  .ghostbtn.on{border-color:var(--blood);background:rgba(142,17,19,.35);color:#fff}
+  .ghostbtn small{display:block;font-size:10px;color:#8d8577;letter-spacing:.5px;margin-top:2px}
+  #poses{bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:6px;align-items:center}
+  .pose{padding:8px 15px;background:rgba(30,22,26,.85);border:1px solid rgba(201,162,39,.22);
+    border-radius:4px;color:#cfc6b4;font-family:inherit;font-size:12px;letter-spacing:1.5px;
+    cursor:pointer;text-transform:uppercase}
+  .pose:hover{border-color:var(--gold);color:#fff}
+  .pose.on{border-color:var(--ghost);color:#fff;box-shadow:0 0 12px rgba(159,232,255,.35)}
+  #hint{bottom:14px;right:14px;font-size:11px;line-height:1.6;color:#8d8577;max-width:240px}
+  #hint b{color:#cfc6b4;font-weight:normal}
+  #loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:14px;background:#08080c;z-index:50;text-align:center;padding:30px}
+  #loading h2{margin:0;font-size:20px;letter-spacing:4px;color:#e7cd6a;text-transform:uppercase}
+  #loading p{margin:0;font-size:13px;color:#8d8577;line-height:1.7;max-width:520px}
+  #stats{position:absolute;left:14px;bottom:14px;font-size:11px;color:#6f6a5f;line-height:1.5}
+</style>
+<script type="importmap">
+{ "imports": {
+    "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="loading">
+  <h2>Haunted Kingdom</h2>
+  <p id="loadmsg">Summoning the dead…</p>
+</div>
+
+<div id="ui">
+  <div class="panel" id="title">
+    <h1>Haunted Kingdom</h1>
+    <div class="sub">Ghost Hunter · Character Studio</div>
+    <div class="note">Joint-rigged 3D characters built from geometry, animated in rigged poses.
+      This is the same rig each ghost uses inside Godot.</div>
+  </div>
+
+  <div class="panel" id="roster">
+    <h2>The Four Ghosts</h2>
+    <button class="ghostbtn on" data-g="king">GHOST KING<small>Final boss · throne room</small></button>
+    <button class="ghostbtn" data-g="queen">GHOST QUEEN<small>Palace boss · illusions</small></button>
+    <button class="ghostbtn" data-g="soldierM">MALE SOLDIER GHOST<small>Barracks patrol</small></button>
+    <button class="ghostbtn" data-g="soldierF">FEMALE SOLDIER GHOST<small>Fast · hides in dark</small></button>
+  </div>
+
+  <div class="panel" id="poses">
+    <button class="pose on" data-p="idle">Idle</button>
+    <button class="pose" data-p="walk">Walking</button>
+    <button class="pose" data-p="attack">Attack</button>
+    <button class="pose" data-p="summon">Summon</button>
+  </div>
+
+  <div class="panel" id="hint">
+    <b>Drag</b> orbit · <b>Wheel</b> zoom · <b>Right-drag</b> pan<br>
+    <b>1–4</b> select ghost · <b>Space</b> cycle pose · <b>F</b> fog · <b>L</b> lantern
+  </div>
+
+  <div id="stats">—</div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* =====================================================================
+   0.  BOOT
+   ===================================================================== */
+const loadEl = document.getElementById('loading');
+const loadMsg = document.getElementById('loadmsg');
+window.addEventListener('error', e => { loadMsg.textContent = 'Failed to load: ' + e.message; });
+setTimeout(() => loadEl.style.display = 'none', 900);
+
+/* =====================================================================
+   1.  RENDERER / SCENE / CAMERA
+   ===================================================================== */
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.95;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x05060a);
+scene.fog = new THREE.FogExp2(0x05070c, 0.030);
+
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.05, 400);
+camera.position.set(3.2, 1.9, 4.6);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.target.set(0, 1.2, 0);
+controls.minDistance = 1.2;
+controls.maxDistance = 40;
+controls.maxPolarAngle = Math.PI * 0.52;
+
+/* =====================================================================
+   2.  MATERIALS  — one shared library, tuned per character
+   ===================================================================== */
+function mat(color, o = {}) {
+  return new THREE.MeshStandardMaterial(Object.assign({
+    color, roughness: 0.88, metalness: 0.0
+  }, o));
+}
+function glow(color, intensity = 1.6) {
+  return new THREE.MeshBasicMaterial({ color, toneMapped: false, transparent: true,
+    opacity: Math.min(1, intensity / 2) });
+}
+
+const M = {
+  // ---- Ghost King -------------------------------------------------
+  kingRobe:   mat(0x4a1015, { roughness: 0.95, side: THREE.DoubleSide }),
+  kingRobeIn: mat(0x14100f, { roughness: 1.0 }),
+  kingTrim:   mat(0xb08d2e, { metalness: 0.85, roughness: 0.32 }),
+  kingGold:   mat(0xd9ae3c, { metalness: 0.9, roughness: 0.25 }),
+  kingFlesh:  mat(0x93a3a6, { roughness: 1.0 }),
+  kingHair:   mat(0xcdd3d6, { roughness: 1.0 }),
+  kingEye:    glow(0xbff4ff, 2.0),
+  kingGem:    mat(0x8e0f16, { metalness: 0.4, roughness: 0.2, emissive: 0x3a0206 }),
+  kingBlade:  mat(0xdfe9ee, { metalness: 0.95, roughness: 0.18, emissive: 0x1d4750 }),
+  kingAura:   new THREE.MeshBasicMaterial({ color: 0x39c8d6, transparent: true,
+                opacity: 0.10, side: THREE.DoubleSide, depthWrite: false, toneMapped: false }),
+
+  // ---- Ghost Queen ------------------------------------------------
+  queeenSaree: mat(0x9c0f18, { roughness: 0.92, side: THREE.DoubleSide,
+                emissive: 0x220003 }),
+  queenGold:  mat(0xc4a03a, { metalness: 0.9, roughness: 0.28 }),
+  queenSkin:  mat(0xd9c3bd, { roughness: 0.95 }),
+  queenHair:  mat(0x0a0a0e, { roughness: 0.75 }),
+  queenEye:   glow(0xfff6e0, 2.0),
+  queenTear:  mat(0x3d0006, { roughness: 0.5 }),
+  queenAura:  new THREE.MeshBasicMaterial({ color: 0xff2b3a, transparent: true,
+                opacity: 0.09, side: THREE.DoubleSide, depthWrite: false, toneMapped: false }),
+
+  // ---- Soldiers ---------------------------------------------------
+  bandage:    mat(0xbfb09a, { roughness: 1.0 }),
+  bandageR:   mat(0x6d5147, { roughness: 1.0 }),   // blood stained
+  uniform:    mat(0x5b5a3c, { roughness: 1.0 }),
+  uniformD:   mat(0x43422d, { roughness: 1.0 }),
+  gear:       mat(0x6b6546, { roughness: 1.0 }),
+  helmet:     mat(0x4c5233, { roughness: 0.85 }),
+  boot:       mat(0x2b241c, { roughness: 1.0 }),
+  gunMetal:   mat(0x3a3229, { metalness: 0.75, roughness: 0.45 }),
+  gunWood:    mat(0x53321d, { roughness: 0.9 }),
+  soldierEye: glow(0xd8b8ff, 1.7),
+  hairBlack:  mat(0x0b0b10, { roughness: 0.85 }),
+};
+
+/* =====================================================================
+   3.  PRIMITIVE HELPERS
+   ===================================================================== */
+function mesh(geo, material, x = 0, y = 0, z = 0) {
+  const m = new THREE.Mesh(geo, material);
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  return m;
+}
+const box  = (w, h, d, m) => mesh(new THREE.BoxGeometry(w, h, d), m);
+const sph  = (r, m, seg = 16) => mesh(new THREE.SphereGeometry(r, seg, seg), m);
+const cyl  = (rt, rb, h, m, seg = 14) => mesh(new THREE.CylinderGeometry(rt, rb, h, seg), m);
+const cone = (r, h, m, seg = 14) => mesh(new THREE.ConeGeometry(r, h, seg), m);
+const torus= (r, t, m) => mesh(new THREE.TorusGeometry(r, t, 8, 18), m);
+
+/** A limb whose pivot sits at the TOP (shoulder / hip / elbow). */
+function limb(len, rad, material, taper = 1.0) {
+  const g = new THREE.Group();
+  const c = mesh(new THREE.CapsuleGeometry(rad * taper, Math.max(0.02, len - rad * 2), 4, 10), material);
+  c.position.y = -len / 2;
+  g.add(c);
+  return g;
+}
+
+/* =====================================================================
+   4.  THE RIG  — every ghost is built on this skeleton
+   ===================================================================== */
+function buildRig(height) {
+  const k = height / 1.8;
+  const root = new THREE.Group();
+
+  const p = {};
+  root.userData.k = k;
+
+  // ---- hips / spine ------------------------------------------------
+  p.hips = new THREE.Group();
+  p.hips.position.y = 0.92 * k;
+  root.add(p.hips);
+  p.hips.add(cyl(0.16 * k, 0.15 * k, 0.20 * k, M.uniformD));
+
+  p.torso = new THREE.Group();          // pivot at waist
+  p.hips.add(p.torso);
+
+  p.chest = new THREE.Group();          // upper spine (leans independently)
+  p.chest.position.y = 0.26 * k;
+  p.torso.add(p.chest);
+
+  p.neck = new THREE.Group();
+  p.neck.position.y = 0.30 * k;
+  p.chest.add(p.neck);
+
+  p.head = new THREE.Group();
+  p.head.position.y = 0.10 * k;
+  p.neck.add(p.head);
+
+  // ---- arms --------------------------------------------------------
+  const shoulderY = 0.24 * k, shoulderX = 0.205 * k;
+  p.armL = limb(0.30 * k, 0.062 * k, M.uniform); p.armL.position.set(-shoulderX, shoulderY, 0);
+  p.armR = limb(0.30 * k, 0.062 * k, M.uniform); p.armR.position.set( shoulderX, shoulderY, 0);
+  p.chest.add(p.armL, p.armR);
+  p.foreL = limb(0.27 * k, 0.052 * k, M.uniform); p.foreL.position.y = -0.30 * k;
+  p.foreR = limb(0.27 * k, 0.052 * k, M.uniform); p.foreR.position.y = -0.30 * k;
+  p.armL.add(p.foreL); p.armR.add(p.foreR);
+
+  // ---- legs --------------------------------------------------------
+  const hipX = 0.105 * k;
+  p.legL = limb(0.46 * k, 0.085 * k, M.uniformD); p.legL.position.set(-hipX, 0, 0);
+  p.legR = limb(0.46 * k, 0.085 * k, M.uniformD); p.legR.position.set( hipX, 0, 0);
+  p.hips.add(p.legL, p.legR);
+  p.shinL = limb(0.44 * k, 0.070 * k, M.uniformD); p.shinL.position.y = -0.46 * k;
+  p.shinR = limb(0.44 * k, 0.070 * k, M.uniformD); p.shinR.position.y = -0.46 * k;
+  p.legL.add(p.shinL); p.legR.add(p.shinR);
+
+  root.userData.parts = p;
+  return root;
+}
+
+/** Standard walking / idle cycle shared by every ghost. */
+function animateRig(g, t, mode, phase = 0) {
+  const p = g.userData.parts;
+  const k = g.userData.k;
+  const sw = Math.sin(t * 4.4 + phase);
+  const sw2 = Math.sin(t * 4.4 + phase + Math.PI);
+  const bob = Math.abs(Math.cos(t * 4.4 + phase)) * 0.03 * k;
+
+  // reset every frame so poses never accumulate
+  p.hips.position.y = 0.92 * k + bob;
+  p.hips.rotation.set(0, 0, 0);
+  p.torso.rotation.set(0, 0, 0);
+  p.chest.rotation.set(0, 0, 0);
+  p.head.rotation.set(0, 0, 0);
+  p.armL.rotation.set(0, 0, 0.10);
+  p.armR.rotation.set(0, 0, -0.10);
+  p.foreL.rotation.set(0, 0, 0);
+  p.foreR.rotation.set(0, 0, 0);
+  p.legL.rotation.set(0, 0, 0);
+  p.legR.rotation.set(0, 0, 0);
+  p.shinL.rotation.set(0, 0, 0);
+  p.shinR.rotation.set(0, 0, 0);
+
+  switch (mode) {
+    case 'idle':
+      p.chest.rotation.x = 0.030 + Math.sin(t * 1.25) * 0.014;      // slow breathing
+      p.head.rotation.y = Math.sin(t * 0.55) * 0.10;                // slow looking around
+      p.armL.rotation.x = Math.sin(t * 1.25) * 0.05;
+      p.armR.rotation.x = Math.sin(t * 1.25 + 0.7) * 0.05;
+      p.foreL.rotation.x = 0.16; p.foreR.rotation.x = 0.16;
+      break;
+
+    case 'walk':
+      p.legL.rotation.x =  sw * 0.62;  p.shinL.rotation.x = Math.max(0, -sw) * 0.75;
+      p.legR.rotation.x =  sw2 * 0.62; p.shinR.rotation.x = Math.max(0, -sw2) * 0.75;
+      p.armL.rotation.x = sw2 * 0.50;  p.armR.rotation.x = sw * 0.50;
+      p.foreL.rotation.x = 0.25;       p.foreR.rotation.x = 0.25;
+      p.torso.rotation.y = sw * 0.09;
+      p.chest.rotation.x = 0.06;
+      p.head.rotation.y = -sw * 0.06;
+      break;
+
+    case 'attack':
+      // wind the arm back, then lunge forward — looped
+      const swing = (Math.sin(t * 2.6) + 1) / 2;                    // 0..1
+      p.chest.rotation.x = -0.30 + swing * 0.55;
+      p.torso.rotation.y = -0.25 + swing * 0.45;
+      p.armR.rotation.x = -1.5 + swing * 3.0;
+      p.armR.rotation.z = -0.4 + swing * 0.55;
+      p.foreR.rotation.x = 1.1 - swing * 1.0;
+      p.armL.rotation.x = -0.5 + swing * 0.4;
+      p.armL.rotation.z = 0.5;
+      p.foreL.rotation.x = 0.9;
+      p.legL.rotation.x = 0.30 - swing * 0.35;
+      p.legR.rotation.x = -0.30 + swing * 0.30;
+      p.shinR.rotation.x = 0.35;
+      p.head.rotation.x = -0.12 + swing * 0.20;
+      break;
+
+    case 'summon':
+      const lift = (Math.sin(t * 1.6) + 1) / 2;
+      p.chest.rotation.x = -0.22 - lift * 0.16;                     // chest thrown back
+      p.head.rotation.x = -0.42;                                    // looking up
+      p.armL.rotation.z = 1.35 + lift * 0.25;                       // arms outstretched
+      p.armR.rotation.z = -1.35 - lift * 0.25;
+      p.armL.rotation.x = -0.35; p.armR.rotation.x = -0.35;
+      p.foreL.rotation.x = -0.30; p.foreR.rotation.x = -0.30;
+      p.legL.rotation.x = -0.06; p.legR.rotation.x = 0.06;
+      p.hips.position.y = 0.92 * k + 0.05 * k + lift * 0.05 * k;    // levitating
+      break;
+  }
+}
+
+/* =====================================================================
+   5.  GHOST KING   (image 1: tall undead king, crown, crimson cloak)
+   ===================================================================== */
+function makeGhostKing() {
+  const H = 2.45;
+  const g = buildRig(H);
+  const p = g.userData.parts;
+  const k = g.userData.k;
+
+  // ---- torso: dark under-robe + skeletal chest ---------------------
+  p.chest.add(cyl(0.20 * k, 0.175 * k, 0.32 * k, M.kingRobeIn));
+  // gold pectoral / skull medallion
+  const medallion = cyl(0.085 * k, 0.085 * k, 0.02 * k, M.kingGold);
+  medallion.rotation.x = Math.PI / 2;
+  medallion.position.set(0, 0.10 * k, 0.17 * k);
+  const skull = sph(0.045 * k, M.kingFlesh, 10);
+  skull.position.set(0, 0.10 * k, 0.185 * k);
+  p.chest.add(medallion, skull);
+  // chain
+  const chain = torus(0.13 * k, 0.008 * k, M.kingTrim);
+  chain.rotation.x = Math.PI / 2.6;
+  chain.position.set(0, 0.22 * k, 0.10 * k);
+  p.chest.add(chain);
+
+  // ---- floor-length crimson robe with gold trim --------------------
+  const robe = mesh(new THREE.CylinderGeometry(0.20 * k, 0.62 * k, 1.55 * k, 20, 1, true), M.kingRobe);
+  robe.position.y = -0.60 * k;
+  p.hips.add(robe);
+  const trim = mesh(new THREE.TorusGeometry(0.60 * k, 0.016 * k, 6, 24), M.kingTrim);
+  trim.rotation.x = Math.PI / 2;
+  trim.position.y = -1.34 * k;
+  p.hips.add(trim);
+  // tattered hem strips
+  for (let i = 0; i < 14; i++) {
+    const a = (i / 14) * Math.PI * 2;
+    const r = 0.60 * k;
+    const t = box(0.09 * k, 0.30 * k, 0.02 * k, i % 3 === 0 ? M.kingRobeIn : M.kingRobe);
+    t.position.set(Math.cos(a) * r, -1.48 * k, Math.sin(a) * r);
+    t.rotation.y = -a;
+    p.hips.add(t);
+  }
+
+  // ---- cloak on the back -------------------------------------------
+  const cloak = mesh(new THREE.CylinderGeometry(0.30 * k, 0.70 * k, 1.35 * k, 16, 1, true, Math.PI * 0.62, Math.PI * 0.76), M.kingRobe);
+  cloak.position.y = -0.55 * k;
+  p.chest.add(cloak);
+
+  // ---- head: gaunt grey face, beard, hair, crown -------------------
+  const skullHead = sph(0.115 * k, M.kingFlesh, 20);
+  skullHead.scale.set(1.0, 1.18, 1.05);
+  p.head.add(skullHead);
+  // sunken brow + cheekbones
+  p.head.add(box(0.19 * k, 0.03 * k, 0.10 * k, M.kingFlesh)).position.set(0, 0.03 * k, 0.07 * k);
+  // beard
+  const beard = cone(0.11 * k, 0.26 * k, M.kingHair);
+  beard.rotation.x = Math.PI;
+  beard.position.set(0, -0.16 * k, 0.03 * k);
+  p.head.add(beard);
+  // long hair falling behind
+  for (let i = 0; i < 7; i++) {
+    const a = -1.3 + (i / 6) * 2.6;
+    const strand = box(0.045 * k, 0.42 * k, 0.05 * k, M.kingHair);
+    strand.position.set(Math.sin(a) * 0.11 * k, -0.16 * k, -Math.cos(a) * 0.10 * k);
+    strand.rotation.z = Math.sin(a) * 0.25;
+    p.head.add(strand);
+  }
+  // glowing eyes
+  const eyeL = sph(0.026 * k, M.kingEye, 10); eyeL.position.set(-0.045 * k, 0.005 * k, 0.10 * k);
+  const eyeR = sph(0.026 * k, M.kingEye, 10); eyeR.position.set( 0.045 * k, 0.005 * k, 0.10 * k);
+  p.head.add(eyeL, eyeR);
+  const eyeGlow = new THREE.PointLight(0x8fe9ff, 2.2, 1.6 * k, 2);
+  eyeGlow.position.set(0, 0.01 * k, 0.14 * k);
+  p.head.add(eyeGlow);
+
+  // ---- crown: gold band + spikes + red gem -------------------------
+  const crown = new THREE.Group();
+  crown.position.y = 0.10 * k;
+  crown.add(cyl(0.115 * k, 0.115 * k, 0.055 * k, M.kingGold, 16));
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2;
+    const spike = cone(0.022 * k, (i === 0 ? 0.16 : (i % 2 ? 0.09 : 0.12)) * k, M.kingGold, 6);
+    spike.position.set(Math.cos(a) * 0.108 * k, (i === 0 ? 0.09 : 0.06) * k, Math.sin(a) * 0.108 * k);
+    crown.add(spike);
+  }
+  const gem = sph(0.024 * k, M.kingGem, 10);
+  gem.position.set(0, 0.005 * k, 0.115 * k);
+  crown.add(gem);
+  p.head.add(crown);
+
+  // ---- hands: bone claws -------------------------------------------
+  for (const fore of [p.foreL, p.foreR]) {
+    const hand = sph(0.05 * k, M.kingFlesh, 8);
+    hand.scale.set(1, 0.75, 1.2);
+    hand.position.y = -0.29 * k;
+    fore.add(hand);
+    for (let i = 0; i < 4; i++) {
+      const claw = cone(0.012 * k, 0.075 * k, M.kingFlesh, 5);
+      claw.rotation.x = Math.PI;
+      claw.position.set(-0.03 * k + i * 0.02 * k, -0.34 * k, 0.01 * k);
+      fore.add(claw);
+    }
+  }
+
+  // ---- broadsword in the right hand --------------------------------
+  const sword = new THREE.Group();
+  sword.add(mesh(new THREE.BoxGeometry(0.055 * k, 0.95 * k, 0.012 * k), M.kingBlade)).position.y = 0.50 * k;
+  const edge = mesh(new THREE.BoxGeometry(0.014 * k, 0.95 * k, 0.014 * k), M.kingEye);
+  edge.position.y = 0.50 * k; sword.add(edge);
+  const guard = box(0.20 * k, 0.03 * k, 0.035 * k, M.kingGold); guard.position.y = 0.03 * k;
+  sword.add(guard);
+  const grip = cyl(0.017 * k, 0.017 * k, 0.16 * k, M.kingRobeIn); grip.position.y = -0.06 * k;
+  sword.add(grip);
+  const pommel = sph(0.026 * k, M.kingGold, 8); pommel.position.y = -0.145 * k;
+  sword.add(pommel);
+  sword.position.set(0, -0.28 * k, 0);
+  sword.rotation.set(-0.15, 0, 0.15);
+  p.foreR.add(sword);
+  g.userData.sword = sword;
+
+  // ---- spectral aura at the feet -----------------------------------
+  const aura = mesh(new THREE.ConeGeometry(0.62 * k, 1.0 * k, 22, 1, true), M.kingAura);
+  aura.position.y = -0.42 * k;
+  aura.castShadow = false; aura.receiveShadow = false;
+  p.hips.add(aura);
+  const auraLight = new THREE.PointLight(0x2fb9cc, 3.0, 4.2, 2);
+  auraLight.position.set(0, -0.1, 0);
+  p.hips.add(auraLight);
+
+  // ---- glow / rim light so he reads in the dark --------------------
+  const rim = new THREE.PointLight(0x2f9fc0, 1.2, 3.0, 2);
+  rim.position.set(0, 0.4, -0.5);
+  p.chest.add(rim);
+
+  return g;
+}
+
+/* =====================================================================
+   6.  GHOST QUEEN   (image 2: red saree, gold border, long black hair)
+   ===================================================================== */
+function makeGhostQueen() {
+  const H = 1.86;
+  const g = buildRig(H);
+  const p = g.userData.parts;
+  const k = g.userData.k;
+
+  // ---- torso / blouse ----------------------------------------------
+  p.chest.add(cyl(0.145 * k, 0.125 * k, 0.30 * k, M.queeenSaree, 14));
+  // pallu (sash) draped over the left shoulder to the back
+  const pallu = mesh(new THREE.PlaneGeometry(0.34 * k, 1.05 * k), M.queeenSaree);
+  pallu.position.set(-0.12 * k, -0.28 * k, -0.10 * k);
+  pallu.rotation.set(0.12, 0.35, 0.18);
+  pallu.material = M.queeenSaree;
+  p.chest.add(pallu);
+  // gold border strip on the pallu
+  const border = mesh(new THREE.PlaneGeometry(0.045 * k, 1.05 * k), M.queenGold);
+  border.position.set(-0.28 * k, -0.28 * k, -0.06 * k);
+  border.rotation.set(0.12, 0.35, 0.18);
+  p.chest.add(border);
+
+  // ---- saree skirt: pleated, torn at the hem ----------------------
+  const skirt = mesh(new THREE.CylinderGeometry(0.19 * k, 0.36 * k, 1.05 * k, 18, 1, true), M.queeenSaree);
+  skirt.position.y = -0.42 * k;
+  p.hips.add(skirt);
+  const hem = mesh(new THREE.TorusGeometry(0.355 * k, 0.014 * k, 6, 26), M.queenGold);
+  hem.rotation.x = Math.PI / 2;
+  hem.position.y = -0.92 * k;
+  p.hips.add(hem);
+  // torn ragged hem: triangular gaps, exactly like the reference
+  for (let i = 0; i < 20; i++) {
+    const a = (i / 20) * Math.PI * 2;
+    const r = 0.355 * k;
+    const rag = mesh(new THREE.ConeGeometry(0.035 * k, (0.16 + (i % 3) * 0.09) * k, 4), M.queeenSaree);
+    rag.rotation.x = Math.PI;
+    rag.position.set(Math.cos(a) * r, -1.00 * k, Math.sin(a) * r);
+    p.hips.add(rag);
+  }
+  // pleats
+  for (let i = 0; i < 5; i++) {
+    const a = -0.5 + i * 0.2;
+    const pl = box(0.05 * k, 0.95 * k, 0.02 * k, M.queeenSaree);
+    pl.position.set(Math.sin(a) * 0.30 * k, -0.45 * k, Math.cos(a) * 0.30 * k);
+    pl.rotation.y = -a;
+    p.hips.add(pl);
+  }
+
+  // ---- bare midriff + gold waist chain ------------------------------
+  p.torso.add(cyl(0.115 * k, 0.135 * k, 0.22 * k, M.queenSkin, 14)).position.y = -0.13 * k;
+  const waist = torus(0.16 * k, 0.012 * k, M.queenGold);
+  waist.rotation.x = Math.PI / 2;
+  waist.position.y = -0.22 * k;
+  p.torso.add(waist);
+
+  // ---- arms: pale, long clawed fingers -----------------------------
+  for (const arm of [p.armL, p.armR]) {
+    // shift from the default uniform colour to bare skin
+    arm.children[0].material = M.queenSkin;
+  }
+  p.foreL.children[0].material = M.queenSkin;
+  p.foreR.children[0].material = M.queenSkin;
+  for (const fore of [p.foreL, p.foreR]) {
+    const hand = sph(0.042 * k, M.queenSkin, 10);
+    hand.scale.set(1, 0.8, 1.25);
+    hand.position.y = -0.27 * k;
+    fore.add(hand);
+    for (let i = 0; i < 5; i++) {
+      const claw = cone(0.010 * k, 0.10 * k, mat(0x2a0d12), 5);   // long dark nails
+      claw.rotation.x = Math.PI;
+      claw.position.set(-0.032 * k + i * 0.016 * k, -0.345 * k, 0.012 * k);
+      fore.add(claw);
+    }
+    // gold bangles
+    for (let i = 0; i < 4; i++) {
+      const b = torus(0.038 * k, 0.007 * k, M.queenGold);
+      b.rotation.x = Math.PI / 2;
+      b.position.y = -0.24 * k - i * 0.022 * k;
+      fore.add(b);
+    }
+  }
+
+  // ---- head: pale face, kohl eyes, blood tears ----------------------
+  const head = sph(0.105 * k, M.queenSkin, 20);
+  head.scale.set(0.98, 1.22, 1.02);
+  p.head.add(head);
+  const bindi = sph(0.012 * k, M.queenGem ?? mat(0x8e0f16), 8);
+  bindi.position.set(0, 0.055 * k, 0.10 * k);
+  p.head.add(bindi);
+  // burning eyes with no pupils
+  const eL = sph(0.024 * k, M.queenEye, 12); eL.position.set(-0.042 * k, 0.012 * k, 0.092 * k);
+  const eR = sph(0.024 * k, M.queenEye, 12); eR.position.set( 0.042 * k, 0.012 * k, 0.092 * k);
+  p.head.add(eL, eR);
+  // dark tear / blood streaks down both cheeks (signature of the reference)
+  for (const sx of [-1, 1]) {
+    for (let i = 0; i < 3; i++) {
+      const tear = box(0.016 * k, (0.10 + i * 0.05) * k, 0.012 * k, M.queenTear);
+      tear.position.set(sx * 0.045 * k, -0.01 * k - i * 0.035 * k, 0.090 * k - i * 0.004 * k);
+      p.head.add(tear);
+    }
+  }
+  // gold earrings
+  for (const sx of [-1, 1]) {
+    const ear = torus(0.022 * k, 0.006 * k, M.queenGold);
+    ear.rotation.y = Math.PI / 2;
+    ear.position.set(sx * 0.105 * k, -0.02 * k, 0);
+    p.head.add(ear);
+  }
+  const eyeGlow = new THREE.PointLight(0xffdcae, 1.3, 1.4 * k, 2);
+  eyeGlow.position.set(0, 0.01 * k, 0.14 * k);
+  p.head.add(eyeGlow);
+
+  // ---- long messy black hair ---------------------------------------
+  const hairCap = sph(0.118 * k, M.queenHair, 18);
+  hairCap.scale.set(1.02, 1.1, 1.06);
+  hairCap.position.y = 0.012 * k;
+  p.head.add(hairCap);
+  // long strands down the back and over the shoulders
+  for (let i = 0; i < 22; i++) {
+    const a = (i / 22) * Math.PI * 2;
+    const len = 0.55 * k + Math.random() * 0.75 * k;
+    const strand = box(0.032 * k, len, 0.045 * k, M.queenHair);
+    const r = 0.108 * k;
+    const back = Math.cos(a) * 0.5 + 0.5;                 // thicker at the back
+    strand.position.set(Math.sin(a) * r, -0.06 * k - len / 2, -Math.cos(a) * r);
+    strand.rotation.z = Math.sin(a) * 0.22;
+    strand.rotation.x = Math.cos(a) * 0.14;
+    strand.scale.z = 0.6 + back * 0.9;
+    p.head.add(strand);
+  }
+  // face-framing strands
+  for (const sx of [-1, 1]) {
+    const s = box(0.03 * k, 0.42 * k, 0.03 * k, M.queenHair);
+    s.position.set(sx * 0.092 * k, -0.20 * k, 0.055 * k);
+    s.rotation.z = sx * 0.10;
+    p.head.add(s);
+  }
+
+  // ---- feet (bare, filthy) ------------------------------------------
+  for (const shin of [p.shinL, p.shinR]) {
+    shin.children[0].material = M.queenSkin;
+    const foot = box(0.075 * k, 0.035 * k, 0.19 * k, M.queenSkin);
+    foot.position.set(0, -0.45 * k, 0.055 * k);
+    shin.add(foot);
+  }
+
+  // ---- ghostly red aura --------------------------------------------
+  const aura = mesh(new THREE.ConeGeometry(0.42 * k, 0.9 * k, 20, 1, true), M.queenAura);
+  aura.position.y = -0.40 * k;
+  p.hips.add(aura);
+  const auraLight = new THREE.PointLight(0xd8121f, 1.8, 3.4, 2);
+  auraLight.position.set(0, -0.1, 0);
+  p.hips.add(auraLight);
+
+  return g;
+}
+
+/* =====================================================================
+   7.  MALE SOLDIER GHOST  (image 3: helmet, bandages, pouches, rifle)
+   ===================================================================== */
+function makeSoldierMale() {
+  const H = 1.82;
+  const g = buildRig(H);
+  const p = g.userData.parts;
+  const k = g.userData.k;
+
+  const dressBandaged = (pivot, rad) => {
+    pivot.children[0] && (pivot.children[0].material = M.bandage);
+    for (let i = 0; i < 5; i++) {
+      const wrap = torus(rad, 0.011 * k, i % 3 === 2 ? M.bandageR : M.bandage);
+      wrap.rotation.x = Math.PI / 2 + 0.10 * (i % 2 ? 1 : -1);
+      wrap.position.y = -0.06 * k - i * 0.062 * k;
+      pivot.add(wrap);
+    }
+  };
+
+  // ---- torso: tattered olive uniform over bandages -----------------
+  p.chest.add(cyl(0.185 * k, 0.175 * k, 0.32 * k, M.uniform, 14));
+  // shredded shirt flaps
+  for (let i = 0; i < 9; i++) {
+    const a = -1.4 + (i / 8) * 2.8;
+    const flap = box(0.07 * k, (0.12 + (i % 3) * 0.07) * k, 0.02 * k, M.uniformD);
+    flap.position.set(Math.sin(a) * 0.19 * k, -0.16 * k, Math.cos(a) * 0.18 * k);
+    flap.rotation.y = -a;
+    p.chest.add(flap);
+  }
+  // bandage wraps over the chest
+  for (let i = 0; i < 4; i++) {
+    const w = torus(0.175 * k, 0.014 * k, M.bandage);
+    w.rotation.x = Math.PI / 2;
+    w.rotation.z = 0.14 * (i % 2 ? 1 : -1);
+    w.position.y = -0.10 * k + i * 0.075 * k;
+    p.chest.add(w);
+  }
+  const bloodPatch = sph(0.05 * k, M.bandageR, 8);
+  bloodPatch.scale.set(1.4, 1.0, 0.35);
+  bloodPatch.position.set(-0.06 * k, 0.05 * k, 0.17 * k);
+  p.chest.add(bloodPatch);
+
+  // ---- webbing: belt, pouches, backpack, shoulder straps -----------
+  const belt = cyl(0.20 * k, 0.20 * k, 0.05 * k, M.gear, 16);
+  belt.position.y = -0.16 * k;
+  p.torso.add(belt);
+  for (const sx of [-1, 1]) {
+    const pouch = box(0.075 * k, 0.085 * k, 0.045 * k, M.gear);
+    pouch.position.set(sx * 0.11 * k, -0.19 * k, 0.16 * k);
+    p.torso.add(pouch);
+    const strap = box(0.05 * k, 0.30 * k, 0.015 * k, M.gear);
+    strap.position.set(sx * 0.10 * k, 0.06 * k, 0.175 * k);
+    strap.rotation.z = sx * 0.12;
+    p.chest.add(strap);
+  }
+  const pack = box(0.24 * k, 0.28 * k, 0.14 * k, M.uniformD);
+  pack.position.set(0, 0.02 * k, -0.20 * k);
+  p.chest.add(pack);
+
+  // ---- arms / legs wrapped in bandages -----------------------------
+  dressBandaged(p.armL, 0.062 * k); dressBandaged(p.armR, 0.062 * k);
+  dressBandaged(p.foreL, 0.052 * k); dressBandaged(p.foreR, 0.052 * k);
+  dressBandaged(p.legL, 0.088 * k); dressBandaged(p.legR, 0.088 * k);
+  dressBandaged(p.shinL, 0.072 * k); dressBandaged(p.shinR, 0.072 * k);
+  // sleeves are still uniform on the upper arm
+  p.armL.children[0].material = M.uniform;
+  p.armR.children[0].material = M.uniform;
+
+  // ---- boots -------------------------------------------------------
+  for (const shin of [p.shinL, p.shinR]) {
+    const boot = box(0.10 * k, 0.10 * k, 0.21 * k, M.boot);
+    boot.position.set(0, -0.44 * k, 0.035 * k);
+    shin.add(boot);
+  }
+
+  // ---- head: helmet with netting, bandaged face, one glowing eye ----
+  const head = sph(0.105 * k, M.bandage, 18);
+  head.scale.set(1.0, 1.18, 1.0);
+  p.head.add(head);
+  // bandage straps across the face
+  for (let i = 0; i < 6; i++) {
+    const w = torus(0.105 * k, 0.013 * k, i === 3 ? M.bandageR : M.bandage);
+    w.rotation.x = Math.PI / 2;
+    w.rotation.z = 0.20 * (i % 2 ? 1 : -1);
+    w.position.y = 0.07 * k - i * 0.032 * k;
+    p.head.add(w);
+  }
+  // only one eye is exposed
+  const eye = sph(0.019 * k, M.soldierEye, 10);
+  eye.position.set(-0.038 * k, 0.028 * k, 0.098 * k);
+  p.head.add(eye);
+  const eyeGlow = new THREE.PointLight(0xb98cff, 0.7, 1.0 * k, 2);
+  eyeGlow.position.set(-0.04 * k, 0.03 * k, 0.12 * k);
+  p.head.add(eyeGlow);
+  // dome helmet
+  const helmet = mesh(new THREE.SphereGeometry(0.125 * k, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), M.helmet);
+  helmet.position.y = 0.045 * k;
+  p.head.add(helmet);
+  const brim = cyl(0.128 * k, 0.132 * k, 0.018 * k, M.helmet, 18);
+  brim.position.y = 0.012 * k;
+  p.head.add(brim);
+  // netting
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2;
+    const net = torus(0.125 * k, 0.004 * k, mat(0x2f3520));
+    net.rotation.y = a;
+    net.position.y = 0.06 * k;
+    net.scale.z = 0.4;
+    p.head.add(net);
+  }
+  // chin strap
+  const strap = torus(0.105 * k, 0.008 * k, M.uniformD);
+  strap.rotation.y = Math.PI / 2;
+  strap.position.y = -0.01 * k;
+  p.head.add(strap);
+
+  // ---- rifle held low in the right hand -----------------------------
+  const rifle = new THREE.Group();
+  rifle.add(box(0.028 * k, 0.028 * k, 1.02 * k, M.gunWood)).position.z = 0.05 * k;
+  const barrel = cyl(0.010 * k, 0.011 * k, 0.52 * k, M.gunMetal, 10);
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.z = 0.80 * k;
+  rifle.add(barrel);
+  rifle.add(box(0.026 * k, 0.05 * k, 0.20 * k, M.gunMetal)).position.set(0, -0.02 * k, 0.30 * k);
+  const bolt = cyl(0.010 * k, 0.010 * k, 0.07 * k, M.gunMetal, 8);
+  bolt.rotation.z = Math.PI / 2;
+  bolt.position.set(0.03 * k, 0.01 * k, 0.18 * k);
+  rifle.add(bolt);
+  rifle.position.set(0, -0.27 * k, 0.03 * k);
+  rifle.rotation.set(0.10, 0, 0.08);
+  p.foreR.add(rifle);
+  g.userData.rifle = rifle;
+
+  return g;
+}
+
+/* =====================================================================
+   8.  FEMALE SOLDIER GHOST  (image 4: fully bandaged, long black hair)
+   ===================================================================== */
+function makeSoldierFemale() {
+  const H = 1.72;
+  const g = buildRig(H);
+  const p = g.userData.parts;
+  const k = g.userData.k;
+
+  const wrapBody = (pivot, rad, count, from = -0.05, step = 0.062) => {
+    pivot.children[0] && (pivot.children[0].material = M.bandage);
+    for (let i = 0; i < count; i++) {
+      const w = torus(rad, 0.010 * k, i % 4 === 3 ? M.bandageR : M.bandage);
+      w.rotation.x = Math.PI / 2 + 0.13 * (i % 2 ? 1 : -1);
+      w.position.y = from * k - i * step * k;
+      pivot.add(w);
+    }
+  };
+
+  // ---- fully wrapped torso -----------------------------------------
+  p.chest.add(cyl(0.150 * k, 0.140 * k, 0.31 * k, M.bandage, 14));
+  wrapBody(p.chest, 0.150 * k, 5, 0.14, 0.062);
+  // blood-soaked patches - defining feature of the reference
+  for (const [x, y, z, s] of [[-0.08, 0.10, 0.14, 1.6], [0.05, -0.02, 0.15, 1.2],
+                              [0.02, 0.16, -0.14, 1.4], [-0.10, -0.08, 0.12, 1.0]]) {
+    const patch = sph(0.035 * k, M.bandageR, 8);
+    patch.scale.set(s, s * 0.7, 0.35);
+    patch.position.set(x * k, y * k, z * k);
+    p.chest.add(patch);
+  }
+  // a bandage tail hanging loose
+  const tail = box(0.05 * k, 0.36 * k, 0.012 * k, M.bandage);
+  tail.position.set(0.13 * k, -0.20 * k, 0.08 * k);
+  tail.rotation.z = 0.25;
+  p.chest.add(tail);
+
+  // ---- wrapped hips and a tattered cloth skirt ----------------------
+  p.torso.add(cyl(0.145 * k, 0.155 * k, 0.20 * k, M.bandage, 14));
+  const skirt = mesh(new THREE.CylinderGeometry(0.155 * k, 0.26 * k, 0.62 * k, 16, 1, true), M.bandage);
+  skirt.position.y = -0.36 * k;
+  p.hips.add(skirt);
+  for (let i = 0; i < 16; i++) {                     // ragged hem
+    const a = (i / 16) * Math.PI * 2;
+    const r = 0.26 * k;
+    const rag = mesh(new THREE.ConeGeometry(0.03 * k, (0.10 + (i % 3) * 0.07) * k, 4), M.bandageR);
+    rag.rotation.x = Math.PI;
+    rag.position.set(Math.cos(a) * r, -0.70 * k, Math.sin(a) * r);
+    p.hips.add(rag);
+  }
+
+  // ---- limbs wrapped, clawed hands, bandaged feet -------------------
+  wrapBody(p.armL, 0.058 * k, 4); wrapBody(p.armR, 0.058 * k, 4);
+  wrapBody(p.foreL, 0.048 * k, 4); wrapBody(p.foreR, 0.048 * k, 4);
+  wrapBody(p.legL, 0.082 * k, 5); wrapBody(p.legR, 0.082 * k, 5);
+  wrapBody(p.shinL, 0.066 * k, 5, -0.02, 0.06); wrapBody(p.shinR, 0.066 * k, 5, -0.02, 0.06);
+
+  for (const fore of [p.foreL, p.foreR]) {
+    const hand = sph(0.040 * k, M.bandage, 10);
+    hand.scale.set(1, 0.8, 1.2);
+    hand.position.y = -0.26 * k;
+    fore.add(hand);
+    for (let i = 0; i < 5; i++) {                     // long thin claws
+      const claw = cone(0.009 * k, 0.085 * k, M.bandageR, 5);
+      claw.rotation.x = Math.PI;
+      claw.position.set(-0.028 * k + i * 0.014 * k, -0.325 * k, 0.010 * k);
+      fore.add(claw);
+    }
+  }
+  for (const shin of [p.shinL, p.shinR]) {            // bandaged feet
+    const foot = box(0.075 * k, 0.05 * k, 0.175 * k, M.bandage);
+    foot.position.set(0, -0.45 * k, 0.045 * k);
+    shin.add(foot);
+    for (let i = 0; i < 3; i++) {
+      const toe = sph(0.014 * k, M.bandage, 6);
+      toe.position.set(-0.022 * k + i * 0.022 * k, -0.47 * k, 0.135 * k);
+      shin.add(toe);
+    }
+  }
+
+  // ---- head: fully bandaged face, one pale eye ----------------------
+  const head = sph(0.100 * k, M.bandage, 18);
+  head.scale.set(1.0, 1.20, 1.0);
+  p.head.add(head);
+  for (let i = 0; i < 8; i++) {                       // bandage layers over the face
+    const w = torus(0.100 * k, 0.012 * k, i === 4 ? M.bandageR : M.bandage);
+    w.rotation.x = Math.PI / 2;
+    w.rotation.z = 0.17 * (i % 2 ? 1 : -1);
+    w.position.y = 0.08 * k - i * 0.028 * k;
+    p.head.add(w);
+  }
+  // a single visible eye, exactly like the close-up in the reference
+  const eye = sph(0.020 * k, glow(0xe8e2d0, 1.5), 12);
+  eye.position.set(-0.036 * k, 0.022 * k, 0.094 * k);
+  p.head.add(eye);
+  const eyeGlow = new THREE.PointLight(0xcfd8e0, 0.6, 0.9 * k, 2);
+  eyeGlow.position.set(-0.04 * k, 0.02 * k, 0.12 * k);
+  p.head.add(eyeGlow);
+
+  // ---- long straight black hair -------------------------------------
+  const cap = sph(0.108 * k, M.hairBlack, 18);
+  cap.scale.set(1.02, 1.08, 1.05);
+  cap.position.y = 0.02 * k;
+  p.head.add(cap);
+  for (let i = 0; i < 26; i++) {
+    const a = (i / 26) * Math.PI * 2;
+    const len = 0.62 * k + Math.random() * 0.62 * k;
+    const strand = box(0.028 * k, len, 0.038 * k, M.hairBlack);
+    const r = 0.104 * k;
+    strand.position.set(Math.sin(a) * r, -0.05 * k - len / 2, -Math.cos(a) * r);
+    strand.rotation.z = Math.sin(a) * 0.16;
+    p.head.add(strand);
+  }
+
+  // ---- cold blue haunt aura ----------------------------------------
+  const aura = mesh(new THREE.ConeGeometry(0.36 * k, 0.75 * k, 18, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0x5f7fa8, transparent: true, opacity: 0.08,
+      side: THREE.DoubleSide, depthWrite: false, toneMapped: false }));
+  aura.position.y = -0.36 * k;
+  p.hips.add(aura);
+
+  return g;
+}
+
+/* =====================================================================
+   9.  ENVIRONMENT  — a slice of the abandoned village
+   ===================================================================== */
+function buildVillage() {
+  const world = new THREE.Group();
+
+  const ground = mesh(new THREE.PlaneGeometry(120, 120), mat(0x241d17, { roughness: 1 }), 0, 0, 0);
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  world.add(ground);
+
+  // tombstones
+  for (let i = 0; i < 26; i++) {
+    const a = Math.random() * Math.PI * 2, r = 7 + Math.random() * 16;
+    const st = box(0.5 + Math.random() * 0.2, 0.8 + Math.random() * 0.6, 0.14, mat(0x4a4642));
+    st.position.set(Math.cos(a) * r, 0.5, Math.sin(a) * r);
+    st.rotation.y = Math.random() * Math.PI;
+    st.rotation.z = (Math.random() - 0.5) * 0.25;
+    world.add(st);
+  }
+  // ruined walls
+  for (let i = 0; i < 14; i++) {
+    const a = Math.random() * Math.PI * 2, r = 9 + Math.random() * 15;
+    const w = box(2 + Math.random() * 3, 1.5 + Math.random() * 2.4, 0.35, mat(0x3a352e));
+    w.position.set(Math.cos(a) * r, w.geometry.parameters.height / 2, Math.sin(a) * r);
+    w.rotation.y = Math.random() * Math.PI;
+    world.add(w);
+  }
+  // dead trees
+  for (let i = 0; i < 9; i++) {
+    const a = Math.random() * Math.PI * 2, r = 12 + Math.random() * 12;
+    const tree = new THREE.Group();
+    const trunk = cyl(0.10, 0.20, 4.2, mat(0x241c15), 8);
+    trunk.position.y = 2.1;
+    tree.add(trunk);
+    for (let b = 0; b < 6; b++) {
+      const br = cyl(0.03, 0.07, 1.5 + Math.random(), mat(0x241c15), 6);
+      br.position.set(0, 2.4 + Math.random() * 1.6, 0);
+      br.rotation.set((Math.random() - 0.5) * 1.4, Math.random() * 6.28, 1.1);
+      br.position.x = Math.sin(br.rotation.y) * 0.4;
+      tree.add(br);
+    }
+    tree.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
+    tree.rotation.y = Math.random() * 6.28;
+    world.add(tree);
+  }
+  return world;
+}
+
+/* =====================================================================
+   10.  LIGHTING
+   ===================================================================== */
+const moon = new THREE.DirectionalLight(0x8fb4ff, 0.35);
+moon.position.set(-9, 14, 7);
+moon.castShadow = true;
+moon.shadow.mapSize.set(2048, 2048);
+moon.shadow.camera.left = -16; moon.shadow.camera.right = 16;
+moon.shadow.camera.top = 16;   moon.shadow.camera.bottom = -16;
+moon.shadow.camera.far = 50;
+moon.shadow.bias = -0.0008;
+scene.add(moon);
+
+scene.add(new THREE.AmbientLight(0x2a3550, 0.22));
+const hemi = new THREE.HemisphereLight(0x4b5f8c, 0x120e0a, 0.30);
+scene.add(hemi);
+
+// a lantern you can toggle with L
+const lantern = new THREE.PointLight(0xffb35c, 0, 14, 2);
+lantern.position.set(2.4, 2.3, 2.6);
+scene.add(lantern);
+let lanternOn = false;
+
+// flickering candle for atmosphere
+const candle = new THREE.PointLight(0xffa347, 1.4, 7, 2);
+candle.position.set(-3.2, 1.1, 2.2);
+scene.add(candle);
+candle.add(sph(0.035, glow(0xffcf8a, 2), 8));
+
+scene.add(buildVillage());
+
+/* =====================================================================
+   11.  SPAWN THE FOUR GHOSTS
+   ===================================================================== */
+const ghosts = {
+  king:     { obj: makeGhostKing(),     label: 'Ghost King',           pos: [0, 0, -1.6], h: 2.45 },
+  queen:    { obj: makeGhostQueen(),    label: 'Ghost Queen',          pos: [-3.1, 0, 0.6], h: 1.86 },
+  soldierM: { obj: makeSoldierMale(),   label: 'Male Soldier Ghost',   pos: [3.0, 0, 0.4],  h: 1.82 },
+  soldierF: { obj: makeSoldierFemale(), label: 'Female Soldier Ghost', pos: [0.4, 0, 3.4],  h: 1.72 },
+};
+for (const key in ghosts) {
+  const g = ghosts[key];
+  g.obj.position.set(g.pos[0], g.pos[1], g.pos[2]);
+  g.obj.userData.phase = key === 'queen' ? 1.7 : key === 'soldierF' ? 3.1 : 0;
+  scene.add(g.obj);
+  // a pool of light under each ghost so they are readable in the fog
+  const pool = new THREE.PointLight(
+    key === 'king' ? 0x38c6d8 : key === 'queen' ? 0xd3151f : 0x8a7fb0,
+    0.9, 5.5, 2);
+  pool.position.set(g.pos[0], 0.6, g.pos[2]);
+  scene.add(pool);
+}
+
+/* =====================================================================
+   12.  UI WIRING
+   ===================================================================== */
+let currentGhost = 'king';
+let currentPose = 'idle';
+
+const poseNames = ['idle', 'walk', 'attack', 'summon'];
+
+function selectGhost(key, resetPose = false) {
+  currentGhost = key;
+  document.querySelectorAll('.ghostbtn').forEach(b =>
+    b.classList.toggle('on', b.dataset.g === key));
+  const g = ghosts[key];
+  controls.target.set(g.pos[0], g.h * 0.52, g.pos[2]);
+  const dist = g.h * 2.1;
+  camera.position.set(g.pos[0] + dist * 0.62, g.h * 0.85, g.pos[2] + dist * 0.78);
+  if (resetPose) setPose('idle');
+}
+
+function setPose(p) {
+  currentPose = p;
+  document.querySelectorAll('.pose').forEach(b =>
+    b.classList.toggle('on', b.dataset.p === p));
+}
+
+document.querySelectorAll('.ghostbtn').forEach(b =>
+  b.addEventListener('click', () => selectGhost(b.dataset.g, true)));
+document.querySelectorAll('.pose').forEach(b =>
+  b.addEventListener('click', () => setPose(b.dataset.p)));
+
+const keys = ['king', 'queen', 'soldierM', 'soldierF'];
+addEventListener('keydown', e => {
+  if (e.code >= 'Digit1' && e.code <= 'Digit4') selectGhost(keys[+e.code.slice(-1) - 1], true);
+  if (e.code === 'Space') {
+    e.preventDefault();
+    setPose(poseNames[(poseNames.indexOf(currentPose) + 1) % poseNames.length]);
+  }
+  if (e.code === 'KeyF') scene.fog.density = scene.fog.density > 0.001 ? 0.0 : 0.030;
+  if (e.code === 'KeyL') { lanternOn = !lanternOn; lantern.intensity = lanternOn ? 2.2 : 0; }
+});
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+/* =====================================================================
+   13.  RENDER LOOP
+   ===================================================================== */
+const clock = new THREE.Clock();
+const statsEl = document.getElementById('stats');
+let fpsAcc = 0, fpsCount = 0, fpsShown = 0;
+
+function tick() {
+  requestAnimationFrame(tick);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.elapsedTime;
+
+  for (const key in ghosts) {
+    animateRig(ghosts[key].obj, t, currentPose, ghosts[key].obj.userData.phase);
+  }
+
+  // candle flicker
+  candle.intensity = 1.15 + Math.sin(t * 11.3) * 0.18 + Math.sin(t * 27.7) * 0.09;
+
+  controls.update();
+  renderer.render(scene, camera);
+
+  fpsAcc += dt; fpsCount++;
+  if (fpsAcc > 0.5) { fpsShown = Math.round(fpsCount / fpsAcc); fpsAcc = 0; fpsCount = 0; }
+  statsEl.textContent =
+    `${fpsShown} fps · ${currentGhost} · pose: ${currentPose} · ` +
+    `fog ${scene.fog.density > 0.001 ? 'on' : 'off'} · lantern ${lanternOn ? 'on' : 'off'}`;
+}
+
+selectGhost('king', true);
+tick();
+</script>
+</body>
+</html>

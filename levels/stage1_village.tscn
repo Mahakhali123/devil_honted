@@ -1,0 +1,439 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://levels/stage1_village.gd" id="1_level"]
+[ext_resource type="PackedScene" path="res://player/player.tscn" id="2_player"]
+[ext_resource type="PackedScene" path="res://ui/hud.tscn" id="3_hud"]
+[ext_resource type="PackedScene" path="res://props/block.tscn" id="4_block"]
+[ext_resource type="PackedScene" path="res://props/door.tscn" id="5_door"]
+[ext_resource type="PackedScene" path="res://props/note.tscn" id="6_note"]
+[ext_resource type="PackedScene" path="res://props/health_kit.tscn" id="7_kit"]
+[ext_resource type="Script" path="res://props/flicker_light.gd" id="8_flicker"]
+[ext_resource type="Script" path="res://props/damage_zone.gd" id="9_damage"]
+[ext_resource type="Script" path="res://props/trigger_zone.gd" id="10_trigger"]
+[ext_resource type="PackedScene" path="res://enemies/enemy_ghost.tscn" id="11_ghost"]
+[ext_resource type="PackedScene" path="res://props/weapon_pickup.tscn" id="12_weapon"]
+
+[sub_resource type="Environment" id="Env_village"]
+background_mode = 1
+background_color = Color(0.055, 0.065, 0.09, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.26, 0.3, 0.4, 1)
+ambient_light_energy = 1.15
+tonemap_mode = 2
+tonemap_exposure = 1.2
+fog_enabled = true
+fog_light_color = Color(0.11, 0.13, 0.18, 1)
+fog_light_energy = 0.85
+fog_density = 0.019
+glow_enabled = true
+glow_intensity = 0.5
+glow_bloom = 0.12
+glow_hdr_threshold = 1.0
+adjustment_enabled = true
+adjustment_saturation = 0.85
+adjustment_contrast = 1.04
+adjustment_brightness = 1.18
+
+[sub_resource type="StandardMaterial3D" id="mat_ground"]
+albedo_color = Color(0.109804, 0.0901961, 0.0745098, 1)
+roughness = 1.0
+
+[sub_resource type="StandardMaterial3D" id="mat_wood"]
+albedo_color = Color(0.188235, 0.129412, 0.0901961, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="mat_stone"]
+albedo_color = Color(0.219608, 0.211765, 0.203922, 1)
+roughness = 1.0
+
+[sub_resource type="StandardMaterial3D" id="mat_plank"]
+albedo_color = Color(0.247059, 0.180392, 0.109804, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="mat_candle"]
+albedo_color = Color(0.898039, 0.870588, 0.752941, 1)
+roughness = 0.85
+emission_enabled = true
+emission = Color(0.55, 0.38, 0.16, 1)
+emission_energy_multiplier = 1.6
+
+[sub_resource type="StandardMaterial3D" id="mat_mist"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(0.25, 0.75, 0.55, 0.16)
+emission_enabled = true
+emission = Color(0.15, 0.6, 0.45, 1)
+emission_energy_multiplier = 1.4
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_well"]
+top_radius = 1.0
+bottom_radius = 1.15
+height = 1.3
+radial_segments = 20
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_well"]
+radius = 1.05
+height = 1.3
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_candle"]
+top_radius = 0.05
+bottom_radius = 0.06
+height = 0.22
+radial_segments = 10
+
+[sub_resource type="SphereMesh" id="SphereMesh_mist"]
+radius = 2.0
+height = 4.0
+radial_segments = 16
+rings = 8
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_mist"]
+radius = 2.2
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_cursed_light"]
+size = Vector3(9, 5, 9)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_chapel"]
+size = Vector3(13, 6, 12)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_gate"]
+size = Vector3(16, 6, 16)
+
+[node name="Stage1Village" type="Node3D"]
+script = ExtResource("1_level")
+next_level_id = "stage2_barracks"
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env_village")
+
+[node name="Moonlight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, 0, -0.5, -0.383, 0.6428, -0.6633, 0.3214, 0.766, 0.5567, 0, 12, 0)
+light_color = Color(0.549, 0.647, 0.949, 1)
+light_energy = 0.7
+shadow_enabled = true
+directional_shadow_max_distance = 60.0
+
+[node name="Ground" parent="." instance=ExtResource("4_block")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+size = Vector3(90, 1, 90)
+material = SubResource("mat_ground")
+
+[node name="Village" type="Node3D" parent="."]
+
+[node name="HouseA" parent="Village" instance=ExtResource("4_block")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 2.4, -12)
+size = Vector3(9, 4.8, 8)
+material = SubResource("mat_wood")
+
+[node name="HouseB" parent="Village" instance=ExtResource("4_block")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 2, -14)
+size = Vector3(8, 4, 7)
+material = SubResource("mat_wood")
+
+[node name="HouseC" parent="Village" instance=ExtResource("4_block")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 1.8, 6)
+size = Vector3(7, 3.6, 7)
+material = SubResource("mat_stone")
+
+[node name="HouseD" parent="Village" instance=ExtResource("4_block")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15, 2.2, 8)
+size = Vector3(9, 4.4, 8)
+material = SubResource("mat_stone")
+
+[node name="Fence1" parent="Village" instance=ExtResource("4_block")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0.7, 12)
+size = Vector3(6, 1.4, 0.25)
+material = SubResource("mat_plank")
+
+[node name="Fence2" parent="Village" instance=ExtResource("4_block")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0.7, 13)
+size = Vector3(7, 1.4, 0.25)
+material = SubResource("mat_plank")
+
+[node name="Fence3" parent="Village" instance=ExtResource("4_block")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0.7, -4)
+size = Vector3(0.25, 1.4, 5)
+material = SubResource("mat_plank")
+
+[node name="Fence4" parent="Village" instance=ExtResource("4_block")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 0.7, -3)
+size = Vector3(0.25, 1.4, 6)
+material = SubResource("mat_plank")
+
+[node name="Fence5" parent="Village" instance=ExtResource("4_block")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 0.7, 15)
+size = Vector3(0.25, 1.4, 6)
+material = SubResource("mat_plank")
+
+[node name="Crate1" parent="Village" instance=ExtResource("4_block")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.2, 0.6, 10.5)
+size = Vector3(1.2, 1.2, 1.2)
+material = SubResource("mat_plank")
+
+[node name="Crate2" parent="Village" instance=ExtResource("4_block")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.6, 0.6, 10.9)
+size = Vector3(1.2, 1.2, 1.2)
+material = SubResource("mat_plank")
+
+[node name="Crate3" parent="Village" instance=ExtResource("4_block")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.9, 1.8, 10.7)
+size = Vector3(1.2, 1.2, 1.2)
+material = SubResource("mat_plank")
+
+[node name="Platform" parent="Village" instance=ExtResource("4_block")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11, 1.2, 2)
+size = Vector3(6, 2.4, 6)
+material = SubResource("mat_plank")
+
+[node name="Ramp" parent="Village" instance=ExtResource("4_block")]
+transform = Transform3D(1, 0, 0, 0, 0.9397, 0.342, 0, -0.342, 0.9397, 11, 1.15, 8.4)
+size = Vector3(3, 0.35, 7)
+material = SubResource("mat_plank")
+
+[node name="Chapel" type="Node3D" parent="."]
+
+[node name="BackWall" parent="Chapel" instance=ExtResource("4_block")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, -18.5)
+size = Vector3(11, 4.4, 0.6)
+material = SubResource("mat_stone")
+
+[node name="LeftWall" parent="Chapel" instance=ExtResource("4_block")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.2, 2.2, -13.5)
+size = Vector3(0.6, 4.4, 10.6)
+material = SubResource("mat_stone")
+
+[node name="RightWall" parent="Chapel" instance=ExtResource("4_block")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.2, 2.2, -13.5)
+size = Vector3(0.6, 4.4, 10.6)
+material = SubResource("mat_stone")
+
+[node name="FrontLeft" parent="Chapel" instance=ExtResource("4_block")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.2, 2.2, -8.4)
+size = Vector3(4.6, 4.4, 0.6)
+material = SubResource("mat_stone")
+
+[node name="FrontRight" parent="Chapel" instance=ExtResource("4_block")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.2, 2.2, -8.4)
+size = Vector3(4.6, 4.4, 0.6)
+material = SubResource("mat_stone")
+
+[node name="Roof" parent="Chapel" instance=ExtResource("4_block")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.6, -13.5)
+size = Vector3(11.8, 0.5, 11.6)
+material = SubResource("mat_wood")
+
+[node name="Altar" parent="Chapel" instance=ExtResource("4_block")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, -16.8)
+size = Vector3(1.8, 1.2, 0.9)
+material = SubResource("mat_stone")
+
+[node name="Door" parent="Chapel" instance=ExtResource("5_door")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.9, 0, -8.4)
+locked_message = "Something is holding the chapel door shut from the inside."
+
+[node name="ChapelNote" parent="Chapel" instance=ExtResource("6_note")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.22, -16.8)
+clue_id = "chapel_note"
+text = "Third night of the red moon.
+The soldiers are dead but they will not lie down.
+We sealed the Queen in the palace and the King in his throne room.
+God help whoever reads this - DO NOT DRINK FROM THE WELL."
+objective_after = "Find the cursed well to the west"
+
+[node name="HealthKit1" parent="Chapel" instance=ExtResource("7_kit")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.4, 0, -12)
+heal_amount = 35.0
+pickup_name = "bandages"
+
+[node name="Well" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 0.65, 5)
+collision_layer = 1
+collision_mask = 0
+
+[node name="Mesh" type="MeshInstance3D" parent="Well"]
+mesh = SubResource("CylinderMesh_well")
+material_override = SubResource("mat_stone")
+
+[node name="Collision" type="CollisionShape3D" parent="Well"]
+shape = SubResource("CylinderShape3D_well")
+
+[node name="CursedMist" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 1.2, 5)
+collision_layer = 0
+collision_mask = 2
+script = ExtResource("9_damage")
+damage_per_second = 15.0
+tick_seconds = 0.5
+
+[node name="Shape" type="CollisionShape3D" parent="CursedMist"]
+shape = SubResource("SphereShape3D_mist")
+
+[node name="Visual" type="MeshInstance3D" parent="CursedMist"]
+mesh = SubResource("SphereMesh_mist")
+material_override = SubResource("mat_mist")
+
+[node name="CursedLight" type="OmniLight3D" parent="CursedMist"]
+light_color = Color(0.25, 0.9, 0.6, 1)
+light_energy = 1.8
+omni_range = 7.0
+
+[node name="Triggers" type="Node3D" parent="."]
+
+[node name="GateTrigger" type="Area3D" parent="Triggers"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 10)
+collision_layer = 0
+collision_mask = 2
+script = ExtResource("10_trigger")
+message = "The village has been dead for a hundred years.
+Something still walks between the houses."
+message_seconds = 6.0
+new_objective = "Explore the abandoned village"
+
+[node name="Shape" type="CollisionShape3D" parent="Triggers/GateTrigger"]
+shape = SubResource("BoxShape3D_gate")
+
+[node name="ChapelTrigger" type="Area3D" parent="Triggers"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, -13)
+collision_layer = 0
+collision_mask = 2
+script = ExtResource("10_trigger")
+message = "A chapel. The door is not shut properly."
+message_seconds = 3.5
+new_objective = "Search the chapel"
+
+[node name="Shape" type="CollisionShape3D" parent="Triggers/ChapelTrigger"]
+shape = SubResource("BoxShape3D_chapel")
+
+[node name="WellTrigger" type="Area3D" parent="Triggers"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 3, 5)
+collision_layer = 0
+collision_mask = 2
+script = ExtResource("10_trigger")
+message = "Green mist pours out of the well. It burns your skin."
+message_seconds = 4.0
+new_objective = "Get away from the well"
+
+[node name="Shape" type="CollisionShape3D" parent="Triggers/WellTrigger"]
+shape = SubResource("BoxShape3D_cursed_light")
+
+[node name="Lights" type="Node3D" parent="."]
+
+[node name="Candle1" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.2, 1.7, 11.5)
+light_color = Color(1, 0.72, 0.35, 1)
+omni_range = 8.0
+script = ExtResource("8_flicker")
+base_energy = 1.5
+
+[node name="Wax1" type="MeshInstance3D" parent="Lights/Candle1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.35, 0)
+mesh = SubResource("CylinderMesh_candle")
+material_override = SubResource("mat_candle")
+
+[node name="Candle2" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13, 1.6, -7)
+light_color = Color(1, 0.7, 0.32, 1)
+omni_range = 8.0
+script = ExtResource("8_flicker")
+base_energy = 1.3
+
+[node name="Wax2" type="MeshInstance3D" parent="Lights/Candle2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.35, 0)
+mesh = SubResource("CylinderMesh_candle")
+material_override = SubResource("mat_candle")
+
+[node name="Candle3" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.2, 2.6, -7.6)
+light_color = Color(1, 0.68, 0.3, 1)
+omni_range = 9.0
+shadow_enabled = true
+script = ExtResource("8_flicker")
+base_energy = 1.6
+
+[node name="Wax3" type="MeshInstance3D" parent="Lights/Candle3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.35, 0)
+mesh = SubResource("CylinderMesh_candle")
+material_override = SubResource("mat_candle")
+
+[node name="Candle4" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.6, 1.6, -17)
+light_color = Color(1, 0.66, 0.28, 1)
+omni_range = 9.0
+shadow_enabled = true
+script = ExtResource("8_flicker")
+base_energy = 1.7
+blackout_chance = 0.006
+
+[node name="Wax4" type="MeshInstance3D" parent="Lights/Candle4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.35, 0)
+mesh = SubResource("CylinderMesh_candle")
+material_override = SubResource("mat_candle")
+
+[node name="Candle5" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.5, 3.3, 2)
+light_color = Color(1, 0.74, 0.38, 1)
+omni_range = 9.0
+script = ExtResource("8_flicker")
+base_energy = 1.4
+
+[node name="Wax5" type="MeshInstance3D" parent="Lights/Candle5"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.35, 0)
+mesh = SubResource("CylinderMesh_candle")
+material_override = SubResource("mat_candle")
+
+[node name="TowerNote" parent="." instance=ExtResource("6_note")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11, 2.45, 2)
+clue_id = "tower_note"
+text = "WHOEVER CLIMBS HERE -
+The soldiers patrol the barracks at night.
+Their boots still march. Their rifles still fire.
+Burn the uniforms. Break the rifles. They will not stop otherwise."
+objective_after = "STAGE 1 COMPLETE  -  the dead are waking"
+
+[node name="HealthKit2" parent="." instance=ExtResource("7_kit")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10.5, 0, -4)
+heal_amount = 35.0
+pickup_name = "bandages"
+
+[node name="HealthKit3" parent="." instance=ExtResource("7_kit")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.6, 2.4, 3.4)
+heal_amount = 35.0
+pickup_name = "bandages"
+
+[node name="PlayerSpawn" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 14)
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 14)
+
+[node name="HUD" parent="." instance=ExtResource("3_hud")]
+
+[node name="Spirits" type="Node3D" parent="."]
+
+[node name="GirlSoldierA" parent="Spirits" instance=ExtResource("11_ghost")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0.2, -2)
+rig_body = 3
+quest_id = "stage1_girl_a"
+roam_radius = 8.0
+
+[node name="GirlSoldierB" parent="Spirits" instance=ExtResource("11_ghost")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0.2, -6)
+rig_body = 3
+quest_id = "stage1_girl_b"
+roam_radius = 8.0
+
+[node name="BoySoldier" parent="Spirits" instance=ExtResource("11_ghost")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, -14)
+rig_body = 2
+quest_id = "stage1_boy"
+roam_radius = 9.0
+
+[node name="Armory" type="Node3D" parent="."]
+
+[node name="BatPickup" parent="Armory" instance=ExtResource("12_weapon")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 0, 11)
+weapon_id = "wooden_bat"
+
+[node name="PanPickup" parent="Armory" instance=ExtResource("12_weapon")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 0, 4)
+weapon_id = "frying_pan"

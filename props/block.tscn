@@ -1,0 +1,23 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://props/block.gd" id="1_block"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_block"]
+resource_local_to_scene = true
+size = Vector3(4, 3, 4)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_block"]
+resource_local_to_scene = true
+size = Vector3(4, 3, 4)
+
+[node name="Block" type="StaticBody3D"]
+collision_layer = 1
+collision_mask = 0
+script = ExtResource("1_block")
+size = Vector3(4, 3, 4)
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_block")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_block")

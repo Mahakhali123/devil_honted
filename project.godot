@@ -1,0 +1,56 @@
+; Engine configuration file.
+; Haunted Kingdom: Ghost Hunter
+; STAGE 1 - Playable first-person player + abandoned village test level.
+;
+; NOTE FOR BEGINNERS:
+; You normally never edit this file by hand - Godot writes it for you.
+; This one is pre-written so you can just open the project folder in Godot.
+
+config_version=5
+
+[application]
+
+config/name="Haunted Kingdom: Ghost Hunter"
+config/description="A 3D first-person horror game. Stage 1: player controller + abandoned village."
+run/main_scene="res://ui/main_menu.tscn"
+config/features=PackedStringArray("4.4", "Forward Plus")
+config/icon="res://icon.svg"
+
+[autoload]
+
+GameManager="*res://autoload/game_manager.gd"
+ProcAudio="*res://autoload/proc_audio.gd"
+Music="*res://autoload/music.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/vsync/vsync_mode=1
+
+[layer_names]
+
+3d_physics/layer_1="world"
+3d_physics/layer_2="player"
+3d_physics/layer_3="enemy"
+3d_physics/layer_4="interactable"
+3d_physics/layer_5="pickup"
+
+[physics]
+
+3d/default_gravity=18.0
+common/physics_ticks_per_second=60
+
+[rendering]
+
+renderer/rendering_method="forward_plus"
+; The Web export runs on WebGL2, which cannot do Forward+ (Vulkan). These two
+; lines switch ONLY the web build to the Compatibility renderer; the desktop
+; game you play with play.bat keeps Forward+ and its full lighting.
+renderer/rendering_method.mobile="gl_compatibility"
+renderer/rendering_method.web="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.011, 0.011, 0.016, 1)
+anti_aliasing/quality/msaa_3d=1
+lights_and_shadows/positional_shadow/soft_shadow_filter_quality=2
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=2
