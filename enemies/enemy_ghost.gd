@@ -240,6 +240,12 @@ func _tick_chase(delta: float) -> void:
 		_set_state(State.PATROL)
 		_pick_roam_target()
 		return
+	# Under the netted palang the player is out of reach. Kamla loses the
+	# thread and drifts away - even when she is standing at the bedside.
+	if GameManager.player_hidden:
+		_set_state(State.PATROL)
+		_pick_roam_target()
+		return
 	var dist := global_position.distance_to(_player.global_position)
 
 	if dist > lose_radius:
@@ -269,6 +275,10 @@ func _enter_attack() -> void:
 
 func _tick_attack(delta: float) -> void:
 	_stop()
+	if GameManager.player_hidden:
+		_set_state(State.PATROL)
+		_pick_roam_target()
+		return
 	if _player != null:
 		var to := _player.global_position - global_position
 		to.y = 0.0
@@ -292,7 +302,7 @@ func _tick_attack(delta: float) -> void:
 
 
 func _strike() -> void:
-	if _player == null:
+	if _player == null or GameManager.player_hidden:
 		return
 	if global_position.distance_to(_player.global_position) <= attack_range + 1.0:
 		_player.take_damage(attack_damage, self)
@@ -408,7 +418,7 @@ func _enter_alert() -> void:
 
 
 func _can_sense() -> bool:
-	if _player == null or _player.is_dead():
+	if _player == null or _player.is_dead() or GameManager.player_hidden:
 		return false
 	var dist := global_position.distance_to(_player.global_position)
 	var effective := detect_radius
@@ -509,6 +519,15 @@ func _update_health_bar() -> void:
 # =========================================================================
 #  PUBLIC API  (Stage 4 weapons call take_damage)
 # =========================================================================
+## Cremation ash or a temple bell can blind the dead for a few seconds.
+## The ghost keeps its current position but loses the player completely.
+func blind(duration: float) -> void:
+	if state == State.BANISHED or state == State.DORMANT:
+		return
+	_stagger_timer = maxf(_stagger_timer, duration)
+	_set_state(State.STAGGER)
+
+
 func take_damage(amount: float, _source: Node3D = null, stun := 0.0, knockback := 0.0) -> void:
 	if state == State.BANISHED or amount <= 0.0:
 		return
@@ -569,6 +588,18 @@ func banish() -> void:
 		get_tree().create_timer(1.6).timeout.connect(queue_free)
 	else:
 		queue_free()
+
+
+## The ritual uses this to call Kamla to the circle. Once provoked she treats
+## the player as her target and hunts without needing to see them first.
+func provoke(target: PlayerController = null) -> void:
+	if target != null:
+		_player = target
+	if state == State.BANISHED:
+		return
+	if state == State.DORMANT:
+		wake()
+	_set_state(State.CHASE)
 
 
 func wake() -> void:

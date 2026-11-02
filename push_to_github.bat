@@ -10,7 +10,7 @@ set "PATH=%PG%\cmd;%PG%\mingw64\bin;%PATH%"
 cd /d "%~dp0"
 
 echo.
-echo   Repository : https://github.com/Mahakhali123/Hunting-Game.git
+echo   Repository : https://github.com/Mahakhali123/devil_honted.git
 echo   Branch     : main
 echo.
 echo   A "Sign in to GitHub" window should appear.

@@ -5,17 +5,37 @@ Verified = loaded by Godot 4.7.2 (`--import` / headless scene run) with zero err
 
 ---
 
+## HAVELI VERTICAL SLICE — "The Haveli of Kamla"  (IN PROGRESS)
+**Estimate:** 8–12 h of build time (3–4 sessions). The full extended prompt is
+13–18 h (5–7 sessions). Step 1 is complete and previewed; each later step is shown
+for approval before the next begins.
+
+- [x] **Step 1 — Foundation** (~1.5 h): `GameEventBroker`, `GameManager` state / threat /
+      zone / sanity / hidden, player stamina + exhaustion + footstep noise, HUD
+      stamina/sanity/threat/noise widgets, Haveli mission TODO, working double doors,
+      bungalow-scale preview (hall, veranda, courtyard, dining, bedroom, mandir).
+      Duplex shell with five rooms + pooja/tantra/stair spaces; framed Nishanth
+      memorial portrait on the side of the tantra wall; "A GAME BY NISHANTH"
+      restricted to the entrance approach, entrance doors and living hall.
+- [ ] **Step 2 — Inventory** (~2 h): `ItemData`, 6-slot `InventoryManager`, pickups,
+      inventory HUD, drop/use.
+- [ ] **Step 3 — Hiding & containers** (~2 h): wardrobe/drawer hiding spots, physics
+      drawers, enter/exit, muffled sight and noise, peek.
+- [ ] **Step 4 — Kamla FSM** (~3 h): patrol → investigate → chase → search → re-hide,
+      hearing, sight cones, zone awareness, escalation.
+- [ ] **Step 5 — Ritual & kill** (~2 h): ingredient placement, altar/Havan, ritual
+      completion, Kamla kill/respawn loop.
+- [ ] **Step 6 — Full Haveli level** (~2–3 h): all rooms joined, zone triggers,
+      objective chain, lighting/audio pass, final playtest.
+
+---
+
 ## STAGE 1 — Player + Abandoned Village  ✅ COMPLETE
 - [x] `project.godot` (layers, gravity, autoloads, Forward+)
 - [x] `autoload/game_manager.gd` — input map, pause, level loading, fade, overlay, settings
 - [x] `autoload/proc_audio.gd` — all SOUND EFFECTS synthesised at runtime (no audio assets)
-- [x] `autoload/music.gd` + `audio/music/baanali_jaarida.ogg` — looping background music
-      ("Baanali Jaarida", Premada Oorali). Autoload, so it fades in at the main menu and
-      runs unbroken through level changes. Balance with `MUSIC_DB`.
-- [x] Background ambience bed REMOVED on request. It was a synthesised brown-noise
-      wind + 46/69 Hz drone ("a cloudy hum") sitting under the music. The song is
-      now the ONLY continuous sound; footsteps, strikes, doors and ghost whispers
-      are untouched.
+- [x] Background music REMOVED on request: the `Music` autoload, the song files and
+      all references are gone. Footsteps, whispers, doors and stingers remain.
 - [x] Volume mix lives in the `DB_*` constants at the top of `proc_audio.gd`.
       Combat sounds turned down on request: swing -1 → -8, impact +1.5 → -7,
       ghost whisper 0 → -12, hurt +2 → -6 dB. Rebalance the whole game there.
@@ -140,6 +160,9 @@ Verified = loaded by Godot 4.7.2 (`--import` / headless scene run) with zero err
 - [ ] MultiMesh / mesh merging for the ghost rigs (~40-80 meshes each)
 - [ ] Occlusion culling, LOD, shadow budget
 - [ ] Export presets (Windows + Android touch controls)
+- [ ] **Windows .exe build** after Step 6: add a Windows Desktop preset +
+      `export_windows.bat`, build `build/windows/HaveliOfKamla.exe`, and copy the
+      folder to another PC. Requires Godot export templates (not installed yet).
 
 ## WEB / VERCEL BUILD  ✅ BUILT & VERIFIED
 - [x] `export_presets.cfg` — Web preset. Excludes `audio/music/melancholia.*`,
@@ -162,7 +185,7 @@ Run `play.bat` (or open the project in Godot and press F5).
 - **W A S D** move · **SHIFT** sprint · **CTRL** crouch · **SPACE** jump
 - **MOUSE** look · **LEFT CLICK** swing your weapon
 - **E** interact (pick up weapons, keys, bandages, read notes, open doors)
-- **1-6** or **MOUSE WHEEL** switch weapon · **ESC** pause
+- **F** torch on/off · **Q** heal · **1-6** or **MOUSE WHEEL** switch weapon · **ESC** pause
 - The right-hand HUD panel shows the MAP and the **TODO list** - each ghost
   is a task, ticked off the moment you banish it.
 - Stage 2's katana is locked in the armoury: find the **Rusted Armoury Key**

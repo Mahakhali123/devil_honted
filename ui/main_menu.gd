@@ -15,7 +15,7 @@ extends Control
 
 ## The order the stages are listed in on the menu. Add a new level here and in
 ## GameManager.LEVELS and it gets a button.
-const STAGE_ORDER := ["stage1_village", "stage2_barracks"]
+const STAGE_ORDER := ["stage1_village", "stage2_barracks", "haveli_mansion"]
 
 @onready var _main_panel: Control = %MainPanel
 @onready var _settings_panel: Control = %SettingsPanel

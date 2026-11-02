@@ -19,9 +19,9 @@ class_name PlayerController
 ## =========================================================================
 
 @export_group("Movement")
-@export var walk_speed := 3.6
-@export var sprint_speed := 6.4
-@export var crouch_speed := 1.7
+@export var walk_speed := 4.0
+@export var sprint_speed := 7.5
+@export var crouch_speed := 1.5
 @export var ground_accel := 26.0
 @export var air_accel := 5.0
 @export var jump_velocity := 6.2
@@ -45,6 +45,13 @@ class_name PlayerController
 @export var max_health := 100.0
 @export var invulnerable_time := 0.25
 
+@export_group("Stamina")
+@export var max_stamina := 100.0
+@export var sprint_drain := 15.0
+@export var stamina_recover := 10.0
+## You must recover to this much stamina before you can sprint again.
+@export var exhausted_recover_threshold := 25.0
+
 @export_group("Interaction")
 @export var interact_distance := 2.6
 
@@ -63,6 +70,9 @@ class_name PlayerController
 
 # --- runtime state --------------------------------------------------------
 var health := 100.0
+var stamina := 100.0
+var _exhausted := false
+var _is_sprinting := false
 var _dead := false
 var _pitch := 0.0
 var _cam_y := 1.58
@@ -75,6 +85,15 @@ var _invuln := 0.0
 var _trauma := 0.0
 var _current_target: Node = null
 var _gravity := 18.0
+
+# --- bedroom hiding / scripted freezes -----------------------------------
+var _hiding_under_bed := false
+var _hide_exit := Vector3.ZERO
+var _hide_return_yaw := 0.0
+var _hide_lockout := 0.0
+var _hide_layer := 2
+var _hide_mask := 1
+var _frozen := false
 
 # --- combat state ---------------------------------------------------------
 signal weapon_switched(weapon_id: String)
@@ -95,6 +114,7 @@ func _ready() -> void:
 	add_to_group("player")
 	_gravity = float(ProjectSettings.get_setting("physics/3d/default_gravity", 18.0))
 	health = max_health
+	stamina = max_stamina
 	_cam_y = stand_cam_y
 	if _ray != null:
 		_ray.target_position = Vector3(0.0, 0.0, -interact_distance)
@@ -168,10 +188,35 @@ func _physics_process(delta: float) -> void:
 	_invuln = maxf(0.0, _invuln - delta)
 	_hurt_sound_cd = maxf(0.0, _hurt_sound_cd - delta)
 
+	# Hidden under the palang: the world keeps moving, but you do not.
+	# E slips you back out. Mouse look still works, so you can stare up
+	# through the netting at whatever is standing over the bed.
+	if _hiding_under_bed:
+		_hide_lockout = maxf(0.0, _hide_lockout - delta)
+		velocity = Vector3.ZERO
+		_update_camera_effects(delta)
+		GameManager.set_interact_prompt(
+			"E  -  slip out from under the netted palang")
+		if _hide_lockout <= 0.0 and Input.is_action_just_pressed("interact"):
+			exit_hiding_under_bed()
+		return
+
+	# Scripted set-pieces (the sandook lock) stop your feet but not the
+	# haunt. You can still be attacked from behind while the dials turn.
+	if _frozen:
+		velocity.x = 0.0
+		velocity.z = 0.0
+		_apply_gravity(delta)
+		move_and_slide()
+		_update_interaction()
+		_update_camera_effects(delta)
+		return
+
 	_update_stance(delta)
 	_apply_gravity(delta)
 	_update_horizontal(delta)
 	_update_jump(delta)
+	_update_stamina(delta)
 
 	var was_on_floor := is_on_floor()
 	var fall_speed := velocity.y
@@ -179,6 +224,7 @@ func _physics_process(delta: float) -> void:
 
 	if not was_on_floor and is_on_floor() and fall_speed < -5.0:
 		ProcAudio.play_land(global_position)
+		GameEventBroker.player_noise_made.emit(8.0, global_position)
 
 	_update_footsteps(delta)
 	_update_combat(delta)
@@ -200,6 +246,11 @@ func _update_horizontal(delta: float) -> void:
 	dir.y = 0.0
 	dir = dir.normalized()
 
+	var moving := input.length() > 0.1
+	_is_sprinting = moving and not _is_crouching and not _exhausted \
+		and stamina > 0.0 and Input.is_action_pressed("sprint") \
+		and not Input.is_action_pressed("move_back")
+
 	var speed := _current_speed()
 	var target := dir * speed
 	var accel := ground_accel if is_on_floor() else air_accel
@@ -219,9 +270,105 @@ func _update_jump(_delta: float) -> void:
 func _current_speed() -> float:
 	if _is_crouching:
 		return crouch_speed
-	if Input.is_action_pressed("sprint") and not Input.is_action_pressed("move_back"):
+	if _is_sprinting:
 		return sprint_speed
 	return walk_speed
+
+
+## Sprinting burns 15 stamina/sec. Walking / standing recovers 10/sec.
+## Hit 0 and you are locked out of sprinting until 25 stamina.
+func _update_stamina(delta: float) -> void:
+	if _is_sprinting:
+		stamina = maxf(0.0, stamina - sprint_drain * delta)
+		if stamina <= 0.0:
+			_exhausted = true
+			_is_sprinting = false
+	else:
+		stamina = minf(max_stamina, stamina + stamina_recover * delta)
+		if _exhausted and stamina >= exhausted_recover_threshold:
+			_exhausted = false
+
+
+func is_sprinting() -> bool:
+	return _is_sprinting
+
+
+func is_exhausted() -> bool:
+	return _exhausted
+
+
+## Brass surahi / stamina pickups.
+func restore_stamina(amount: float) -> void:
+	stamina = clampf(stamina + amount, 0.0, max_stamina)
+	if _exhausted and stamina >= exhausted_recover_threshold:
+		_exhausted = false
+
+
+## Tainted water: the sprint bar empties in one swallow.
+func drain_stamina_to_zero() -> void:
+	stamina = 0.0
+	_exhausted = true
+	_is_sprinting = false
+
+
+func is_hiding_under_bed() -> bool:
+	return _hiding_under_bed
+
+
+func is_frozen() -> bool:
+	return _frozen
+
+
+## Freeze movement for the sandook lock. Looking and taking damage still work.
+func set_frozen(value: bool) -> void:
+	_frozen = value
+	if value:
+		_is_sprinting = false
+		velocity.x = 0.0
+		velocity.z = 0.0
+
+
+## Crawl under the netted palang. Collision is switched off while hidden so
+## the bed frame cannot push the player back out; the exit point is restored
+## the moment E is pressed again.
+func enter_hiding_under_bed(inside: Vector3, exit_pos: Vector3,
+		yaw_deg: float) -> void:
+	if _hiding_under_bed:
+		return
+	_hide_exit = exit_pos
+	_hide_return_yaw = rotation_degrees.y
+	_hide_layer = collision_layer
+	_hide_mask = collision_mask
+	_hiding_under_bed = true
+	_hide_lockout = 0.30
+	_frozen = false
+	velocity = Vector3.ZERO
+	global_position = inside
+	rotation_degrees.y = yaw_deg
+	_cam_y = 0.46
+	collision_layer = 0
+	collision_mask = 0
+	if _weapon_view != null:
+		_weapon_view.visible = false
+	GameManager.set_player_hidden(true, self)
+	GameManager.set_interact_prompt("")
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+func exit_hiding_under_bed() -> void:
+	if not _hiding_under_bed:
+		return
+	_hiding_under_bed = false
+	_hide_lockout = 0.35
+	global_position = _hide_exit
+	rotation_degrees.y = _hide_return_yaw
+	_cam_y = stand_cam_y
+	collision_layer = _hide_layer
+	collision_mask = _hide_mask
+	if _weapon_view != null:
+		_weapon_view.visible = true
+	GameManager.set_player_hidden(false)
+	GameManager.set_interact_prompt("")
 
 
 # =========================================================================
@@ -261,6 +408,13 @@ func _update_footsteps(delta: float) -> void:
 		if _step_accum >= stride:
 			_step_accum = 0.0
 			ProcAudio.play_footstep(global_position, -6.0 if _is_crouching else 0.0)
+			# Haveli noise event: crouch 1 m, walk 5 m, sprint 15 m.
+			var noise_radius := 5.0
+			if _is_crouching:
+				noise_radius = 1.0
+			elif _is_sprinting:
+				noise_radius = 15.0
+			GameEventBroker.player_noise_made.emit(noise_radius, global_position)
 	else:
 		_step_accum = 0.0
 
@@ -306,7 +460,15 @@ func _update_interaction() -> void:
 				found = hit
 	if found != _current_target:
 		_current_target = found
-		GameManager.set_interact_prompt(_current_target.get_interact_text() if _current_target != null else "")
+	# Refresh every frame: some stations change their prompt as their state
+	# changes (the bottle ritual, for example, flips to "NOW" for a heartbeat).
+	var prompt := ""
+	if _current_target != null and is_instance_valid(_current_target):
+		if not _current_target.has_method("can_interact") or _current_target.can_interact():
+			prompt = _current_target.get_interact_text()
+		else:
+			_current_target = null
+	GameManager.set_interact_prompt(prompt)
 
 	if _current_target != null and Input.is_action_just_pressed("interact"):
 		_current_target.interact(self)

@@ -36,6 +36,17 @@ var _low_health_pulse := 0.0
 var _hit_alpha := 0.0
 var _hit_marker := 0.0
 
+# --- Haveli HUD widgets (built in code, so no scene file can break them) ---
+var _stamina_bar: ProgressBar
+var _stamina_label: Label
+var _stamina_state: Label
+var _sanity_bar: ProgressBar
+var _sanity_label: Label
+var _threat_bar: ProgressBar
+var _threat_label: Label
+var _noise_label: Label
+var _interact_icon: Label
+
 
 func _ready() -> void:
 	# Keep the HUD alive while the game is paused, otherwise the pause menu
@@ -56,6 +67,7 @@ func _ready() -> void:
 	GameManager.pause_changed.connect(_on_pause_changed)
 	GameManager.weapons_changed.connect(_on_weapons_changed)
 	GameManager.key_collected.connect(_on_key_collected)
+	GameManager.inventory_changed.connect(_on_inventory_changed)
 	GameManager.objectives_changed.connect(_on_objectives_changed)
 	GameManager.enemy_hit.connect(_on_enemy_hit)
 
@@ -69,12 +81,34 @@ func _ready() -> void:
 	_set_map_title()
 	_refresh_weapons()
 	_refresh_tasks()
+	_build_status_widgets()
 
 
 func _set_map_title() -> void:
 	var title := get_node_or_null("Root/RightPanel/MapTitle") as Label
 	if title != null:
 		title.text = GameManager.level_title().to_upper()
+	# The Haveli has no floor plan: use the map space for the mission TODO.
+	if GameManager.current_level_id == "haveli_mansion":
+		var mm := get_node_or_null("Root/RightPanel/Minimap") as Control
+		if mm != null:
+			mm.visible = false
+		var hs := get_node_or_null("Root/RightPanel/HuntStatus") as Label
+		if hs != null:
+			hs.offset_top = 32.0
+			hs.offset_bottom = 76.0
+		var tt := get_node_or_null("Root/RightPanel/TodoTitle") as Label
+		if tt != null:
+			tt.offset_top = 86.0
+			tt.offset_bottom = 108.0
+		var tl := get_node_or_null("Root/RightPanel/TodoList") as RichTextLabel
+		if tl != null:
+			tl.offset_top = 110.0
+			tl.offset_bottom = 424.0
+		# Ritual items add a few lines under the weapon slots.
+		var wl := get_node_or_null("Root/RightPanel/WeaponList") as Label
+		if wl != null:
+			wl.offset_bottom = 700.0
 
 
 func _process(delta: float) -> void:
@@ -91,6 +125,7 @@ func _process(delta: float) -> void:
 	_update_crosshair(delta)
 	_update_target_panel()
 	_update_hunt_status()
+	_update_status_widgets()
 
 	if _show_debug:
 		_debug_label.text = _debug_text()
@@ -114,8 +149,12 @@ func _debug_text() -> String:
 		lines.append("Speed: %.2f m/s" % Vector2(p.velocity.x, p.velocity.z).length())
 		lines.append("On floor: %s" % str(p.is_on_floor()))
 		lines.append("Crouching: %s" % str(p.is_crouching()))
+		lines.append("Stamina: %.0f  Sprinting: %s" % [p.stamina, str(p.is_sprinting())])
 	if GameManager.current_level_id != "":
 		lines.append("Level: %s" % GameManager.current_level_id)
+	lines.append("Threat: %.1f (%s)  Sanity: %.1f" % [GameManager.threat_level, GameManager.threat_tag(), GameManager.sanity])
+	lines.append("Zone: %s  Hidden: %s" % [GameManager.current_zone, str(GameManager.player_hidden)])
+	lines.append("Last noise: %.0f m  (%.1fs ago)" % [GameManager.last_noise_radius, GameManager.last_noise_age])
 	return "\n".join(lines)
 
 
@@ -187,6 +226,14 @@ func _refresh_weapons() -> void:
 		lines.append("")
 		for k in GameManager.keys:
 			lines.append("KEY  %s" % GameManager.key_display_name(k))
+	if not GameManager.inventory.is_empty():
+		lines.append("")
+		for item_id in GameManager.inventory:
+			var entry: Dictionary = GameManager.inventory[item_id]
+			var count := int(entry.get("count", 0))
+			if count <= 0:
+				continue
+			lines.append("%s  x%d" % [String(entry.get("label", item_id)), count])
 	_weapon_list.text = "\n".join(lines)
 
 
@@ -198,6 +245,10 @@ func _on_key_collected(_key_id: String, _label: String) -> void:
 	_refresh_weapons()
 
 
+func _on_inventory_changed(_items: Dictionary) -> void:
+	_refresh_weapons()
+
+
 # =========================================================================
 #  THE TASK BOX  (right-hand panel)
 # =========================================================================
@@ -206,6 +257,26 @@ func _on_key_collected(_key_id: String, _label: String) -> void:
 func _refresh_tasks() -> void:
 	if _todo_list == null:
 		return
+
+	# The Haveli is a different game mode: its right-hand panel shows the
+	# mission TODO (ingredients / key / Havan / survival), not the ghost ladder.
+	if GameManager.current_level_id == "haveli_mansion":
+		var hout := ""
+		if GameManager.objectives.is_empty():
+			hout += "[color=#6f6a60]  (nothing yet)[/color]\n"
+		else:
+			for o in GameManager.objectives:
+				if typeof(o) != TYPE_DICTIONARY:
+					continue
+				var hdone := bool(o.get("done", false))
+				var htext := String(o.get("text", ""))
+				if hdone:
+					hout += "[color=#63a06c][s]  [x] %s[/s][/color]\n" % htext
+				else:
+					hout += "[color=#ded6c4]  [ ] %s[/color]\n" % htext
+		_todo_list.text = hout
+		return
+
 	var order := [
 		[GhostRig.Body.SOLDIER_FEMALE, "Girl Soldier", "EASIEST"],
 		[GhostRig.Body.SOLDIER_MALE, "Boy Soldier", "EASY"],
@@ -300,6 +371,20 @@ func _update_target_panel() -> void:
 func _update_hunt_status() -> void:
 	if _hunt_status == null:
 		return
+
+	if GameManager.current_level_id == "haveli_mansion":
+		var kamla := get_tree().get_first_node_in_group("kamla")
+		var kstate := "DORMANT"
+		if kamla != null and kamla.has_method("state_name"):
+			kstate = String(kamla.state_name())
+		_hunt_status.text = "KAMLA: %s\nTHREAT %d - %s   ZONE: %s" % [
+			kstate,
+			int(round(GameManager.threat_level)),
+			GameManager.threat_tag(),
+			GameManager.current_zone if GameManager.current_zone != "" else "-",
+		]
+		return
+
 	var left := GameManager.alive_ghost_count()
 	var tag := "SPIRITS LEFT: %d" % left
 	if GameManager.ghosts_total > 0:
@@ -351,6 +436,166 @@ func _on_enemy_hit(_ghost_name: String, damage: float) -> void:
 		_hit_text.text = "-%d" % int(round(damage))
 
 
+# =========================================================================
+#  HAVELI STATUS WIDGETS  (stamina / sanity / threat / noise / interact)
+# =========================================================================
+func _build_status_widgets() -> void:
+	var root := get_node_or_null("Root") as Control
+	if root == null:
+		return
+
+	# --- stamina, above the health bar -----------------------------------
+	var sg := Control.new()
+	sg.anchor_top = 1.0
+	sg.anchor_bottom = 1.0
+	sg.offset_left = 30.0
+	sg.offset_top = -166.0
+	sg.offset_right = 470.0
+	sg.offset_bottom = -118.0
+	sg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(sg)
+	_stamina_label = _widget_label("STAMINA  100", 14, Color(0.88, 0.84, 0.68))
+	_stamina_label.size = Vector2(300.0, 20.0)
+	sg.add_child(_stamina_label)
+	_stamina_bar = _widget_bar(Color(0.72, 0.62, 0.22))
+	_stamina_bar.position = Vector2(0.0, 22.0)
+	_stamina_bar.size = Vector2(300.0, 14.0)
+	sg.add_child(_stamina_bar)
+	_stamina_state = _widget_label("", 13, Color(0.95, 0.42, 0.32))
+	_stamina_state.size = Vector2(300.0, 20.0)
+	_stamina_state.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	sg.add_child(_stamina_state)
+	_noise_label = _widget_label("NOISE  -", 13, Color(0.78, 0.82, 0.9))
+	_noise_label.position = Vector2(312.0, 12.0)
+	_noise_label.size = Vector2(130.0, 24.0)
+	sg.add_child(_noise_label)
+
+	# --- sanity, above stamina --------------------------------------------
+	var ng := Control.new()
+	ng.anchor_top = 1.0
+	ng.anchor_bottom = 1.0
+	ng.offset_left = 30.0
+	ng.offset_top = -214.0
+	ng.offset_right = 470.0
+	ng.offset_bottom = -168.0
+	ng.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(ng)
+	_sanity_label = _widget_label("SANITY  100", 14, Color(0.72, 0.68, 0.88))
+	_sanity_label.size = Vector2(300.0, 20.0)
+	ng.add_child(_sanity_label)
+	_sanity_bar = _widget_bar(Color(0.42, 0.30, 0.68))
+	_sanity_bar.position = Vector2(0.0, 22.0)
+	_sanity_bar.size = Vector2(300.0, 14.0)
+	ng.add_child(_sanity_bar)
+
+	# --- threat, top centre ----------------------------------------------
+	var tg := Control.new()
+	tg.anchor_left = 0.5
+	tg.anchor_right = 0.5
+	tg.offset_left = -170.0
+	tg.offset_top = 12.0
+	tg.offset_right = 170.0
+	tg.offset_bottom = 64.0
+	tg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(tg)
+	_threat_label = _widget_label("THREAT  0  -  CALM", 14, Color(0.85, 0.72, 0.28))
+	_threat_label.size = Vector2(340.0, 20.0)
+	_threat_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tg.add_child(_threat_label)
+	_threat_bar = _widget_bar(Color(0.80, 0.58, 0.18))
+	_threat_bar.position = Vector2(0.0, 24.0)
+	_threat_bar.size = Vector2(340.0, 12.0)
+	tg.add_child(_threat_bar)
+
+	# --- contextual interaction icon, just under the crosshair -----------
+	_interact_icon = _widget_label("[E]", 20, Color(0.98, 0.82, 0.35))
+	_interact_icon.anchor_left = 0.5
+	_interact_icon.anchor_top = 0.5
+	_interact_icon.anchor_right = 0.5
+	_interact_icon.anchor_bottom = 0.5
+	_interact_icon.offset_left = -40.0
+	_interact_icon.offset_top = 26.0
+	_interact_icon.offset_right = 40.0
+	_interact_icon.offset_bottom = 56.0
+	_interact_icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_interact_icon.visible = false
+	root.add_child(_interact_icon)
+
+
+func _widget_label(text: String, size: int, color: Color) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", color)
+	l.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
+	l.add_theme_constant_override("shadow_offset_x", 1)
+	l.add_theme_constant_override("shadow_offset_y", 2)
+	l.add_theme_constant_override("shadow_outline_size", 4)
+	return l
+
+
+func _widget_bar(fill: Color) -> ProgressBar:
+	var bar := ProgressBar.new()
+	bar.max_value = 100.0
+	bar.value = 100.0
+	bar.show_percentage = false
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = Color(0.05, 0.04, 0.05, 0.78)
+	bg.border_color = Color(0.32, 0.27, 0.22, 0.85)
+	bg.set_border_width_all(2)
+	bar.add_theme_stylebox_override("background", bg)
+	var f := StyleBoxFlat.new()
+	f.bg_color = fill
+	bar.add_theme_stylebox_override("fill", f)
+	return bar
+
+
+func _update_status_widgets() -> void:
+	var p := get_tree().get_first_node_in_group("player") as PlayerController
+	if p != null and _stamina_bar != null:
+		_stamina_bar.value = p.stamina
+		_stamina_label.text = "STAMINA  %d" % int(round(p.stamina))
+		if p.is_exhausted():
+			_stamina_state.text = "EXHAUSTED"
+		elif p.is_sprinting():
+			_stamina_state.text = "SPRINTING"
+		else:
+			_stamina_state.text = ""
+
+	if _sanity_bar != null:
+		_sanity_bar.value = GameManager.sanity
+		_sanity_label.text = "SANITY  %d" % int(round(GameManager.sanity))
+		if GameManager.sanity <= 25.0:
+			_sanity_label.add_theme_color_override("font_color", Color(0.95, 0.35, 0.55))
+		else:
+			_sanity_label.add_theme_color_override("font_color", Color(0.72, 0.68, 0.88))
+
+	if _threat_bar != null:
+		_threat_bar.value = GameManager.threat_level
+		_threat_label.text = "THREAT  %d  -  %s" % [int(round(GameManager.threat_level)), GameManager.threat_tag()]
+		var c := Color(0.85, 0.72, 0.28)
+		if GameManager.threat_level >= 70.0:
+			c = Color(0.94, 0.20, 0.14)
+		elif GameManager.threat_level >= 45.0:
+			c = Color(0.94, 0.46, 0.14)
+		elif GameManager.threat_level >= 20.0:
+			c = Color(0.88, 0.66, 0.20)
+		_threat_label.add_theme_color_override("font_color", c)
+
+	if _noise_label != null:
+		if GameManager.last_noise_age < 1.2:
+			_noise_label.text = "NOISE  %d m" % int(round(GameManager.last_noise_radius))
+			_noise_label.modulate.a = 1.0
+		else:
+			_noise_label.text = "NOISE  -"
+			_noise_label.modulate.a = 0.25
+
+	if _interact_icon != null:
+		_interact_icon.visible = GameManager.interact_prompt_text != ""
+
+
 func _update_crosshair(delta: float) -> void:
 	_hit_marker = maxf(0.0, _hit_marker - delta)
 	_hit_alpha = maxf(0.0, _hit_alpha - delta * 2.4)
@@ -359,10 +604,13 @@ func _update_crosshair(delta: float) -> void:
 	if _cross_h == null or _cross_v == null:
 		return
 	var hot := _hit_marker > 0.0
+	var prompt := GameManager.interact_prompt_text != ""
 	var c := Color(1.0, 0.85, 0.35, 0.95) if hot else Color(0.9, 0.88, 0.85, 0.5)
+	if prompt and not hot:
+		c = Color(0.98, 0.82, 0.35, 0.95)
 	_cross_h.color = c
 	_cross_v.color = c
-	var grow := 2.0 if hot else 0.0
+	var grow := 2.0 if hot else (1.0 if prompt else 0.0)
 	_cross_h.offset_left = -9.0 - grow
 	_cross_h.offset_right = 9.0 + grow
 	_cross_v.offset_top = -9.0 - grow

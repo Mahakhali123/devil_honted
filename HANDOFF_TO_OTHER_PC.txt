@@ -1,0 +1,345 @@
+THE HAVELI OF KAMLA - CODE HANDOFF
+Written: 2026-11-02
+Project: C:\Users\Mani_Veera\Documents\HauntedKingdom-extracted\HauntedKingdom
+Engine: Godot 4.7.2 stable (Windows arm64)
+
+====================================================================
+1. WHY THIS FILE EXISTS
+====================================================================
+The project is being moved to another PC. This is the exact stop point.
+Read this file before opening the project or changing any code.
+
+The last work in progress is the GROUND BEDROOM. The six requested
+antique bedroom systems have been written into the palace script, and
+one bedroom preview was rendered, but the systems have NOT been fully
+played or verified yet. Do not treat the bedroom as finished or approved.
+
+====================================================================
+2. WHERE THE CODE IS
+====================================================================
+Main project:
+  C:\Users\Mani_Veera\Documents\HauntedKingdom-extracted\HauntedKingdom
+
+A portable copy with the project and Git history is in the ZIP next to
+this handoff:
+  C:\Users\Mani_Veera\Desktop\Haveli_of_Kamla_Code_Handoff_2026-11-02.zip
+
+The Google Drive folder could not be written to from this machine:
+there is no Google Drive mount, no rclone remote, and no Drive login on
+this PC. The ZIP must be uploaded manually to:
+  https://drive.google.com/drive/folders/1gEFuHFVxsHP6tICc7_QCnXDhfWLnW5Qa
+Then extract it on the other PC and open the folder above as the Godot
+project.
+
+====================================================================
+3. HOW TO RUN ON THE OTHER PC
+====================================================================
+Open Godot 4.7.x and import:
+  ...\HauntedKingdom\project.godot
+
+Direct live launch into the Haveli:
+  play_haveli.bat
+or:
+  & "<godot-console.exe>" --path "<project>" res://tests/step1_duplex_palace.tscn -- --live
+
+Render one still:
+  & "<godot-console.exe>" --path "<project>" --resolution 1280x720 res://tests/step1_duplex_palace.tscn -- --angle=bedroom
+
+Important: on this PC, headless preview rendering hangs at
+RenderingServer.frame_post_draw. Use normal (non-headless) Godot for
+stills. Headless is fine for parsing/probes that quit themselves.
+
+The old PC Godot executable:
+  C:\Users\Mani_Veera\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.7.2-stable_windows_arm64_console.exe
+
+====================================================================
+4. WHAT IS COMPLETE
+====================================================================
+- Playable palace scene: tests/step1_duplex_palace.tscn
+- Original 22.3 x 18.3 m central hall preserved.
+- Dining, kitchen, ground bedroom, upper bedroom, pooja room, Black
+  Magic/tantra room, wide corridor, stair tower and upper gallery.
+- Stair geometry fixed; walkable bottom landing and <45 degree flights.
+- Red pentagram in the tantra room; Nishanth memorial portrait.
+- Black Magician shrine centred in the corridor dead-end niche.
+- Dining gore: meat, blood, severed head.
+- Escape attempt returns player home with:
+  "You can not escape from this world."
+- 14 ghost-photo frames using all five photos and all ten crops.
+- Temple sanctuary fully implemented:
+  Weeping Murti, hanging bells, vibhuti urn/barriers, everlasting diya
+  save point, garlands, ghost gate, ghee/camphor/garland supplies.
+- Black Magic room fully implemented:
+  ash matkas, Ash Wraith, Kapala, nimbu-mirchi, yantras, pierced dolls,
+  cursed items, ash throw (G), ritual insight.
+- Bottle ritual code implemented around the existing tantra pentagram:
+  chalk ring, bottle placement, blood sacrifice, lure, timed E seal,
+  success/failure states, sealed_bottle inventory item.
+- Live Kamla chase/attack was previously verified.
+- Restart was previously verified.
+- Icon set from the uploaded "THE HAVELI OF MANVI" cover art.
+- melancholia.mp3 loops at -15 dB.
+- Main menu includes the Haveli as stage 3.
+
+====================================================================
+5. LAST CHANGE - BEDROOM SYSTEMS (IMPLEMENTED, NOT APPROVED)
+====================================================================
+All of this is in tests/step1_duplex_palace.gd unless noted.
+
+A. Netted Palang
+- Replaced the old bed/canopy calls with a custom _palang() builder.
+- Heavy four-poster, raised mattress, real crawlspace under the bed,
+  translucent dusty mosquito-net walls/ceiling and torn net flap.
+- Hide point on the north side of the bed.
+- PlayerController.enter_hiding_under_bed()/exit_hiding_under_bed()
+  teleport under the bed, disable collision, lower the camera, and set
+  GameManager.player_hidden.
+- Player can look up while hidden. A full-screen shader "net veil"
+  distorts the view, draws netting, and blends in a vague ghost head/
+  shoulders when Kamla is nearby.
+- Kamla ignores/leaves a hidden player: enemy_ghost.gd checks
+  GameManager.player_hidden in sensing/chase/attack/strike.
+
+B. Antique Almirah
+- Custom _antique_almirah() with openable hinged doors and a dark
+  interior. Rusty hinges.
+- Opening emits a 32 m noise spike through
+  GameEventBroker.player_noise_made.
+- Loot order: matches, rusted key, camphor sachet, then dust.
+- 32% chance to reveal a huddled weeping-girl figure inside, with
+  sanity/threat cost.
+
+C. Tarnished Vanity Mirror
+- Broken glass bangles, dried sindoor, tarnished wall mirror.
+- Gazing reveals the randomized three-digit sandook code and pale
+  "safe path" floor marks.
+- Staring drains sanity after 2 seconds; at 3.4 seconds the player's
+  low-poly reflection appears with a malicious smile.
+- Forced break after about 8 seconds costs extra sanity.
+
+D. Iron-Bound Sandook
+- Large iron-strapped chest at the foot of the palang, brass padlock,
+  three dials, lid that opens.
+- Interaction freezes the player with PlayerController.set_frozen(true)
+  while the world/ghost keep running.
+- Code UI: A/D turn, W/S choose dial, Enter try, Q step back.
+- Wrong attempts make noise and cost threat/sanity.
+- Fumbling makes periodic noise, so the player is vulnerable from behind.
+- Correct code gives 2 matchboxes and an iron key stamped KAMLA.
+- The code is randomized at scene build and is revealed by the mirror.
+
+E. Portrait Wall
+- Four rich ghost-photo frames on the ground bedroom west wall.
+- As sanity falls, the people disappear from the glass:
+  royal couple <55, civilian couple <38, King <28, Queen <20.
+- Photos return if sanity recovers.
+- This required the shared _rich_photo_frame() in step1_duplex.gd to
+  name its photo mesh "Photograph".
+
+F. Brass Surahi
+- Brass pitcher on a new nightstand beside the palang.
+- Drinking restores 48 stamina.
+- If the player was recently in the Black Magic room, or carries cursed
+  items, the water is corrupted: stamina is set to zero, sanity/threat
+  rise, and a screen-space blur/tint runs for about 4.8 seconds.
+- 16-second refill cooldown.
+
+G. New bedroom preview angles added
+  bedroom, bedroomantique, bedroommirror, bedroomportraits,
+  bedroomalmirah
+Only this still has been rendered so far:
+  preview/step1_palace_bedroom.png
+It shows the new palang and sandook, but the room still reads very dark;
+lighting/composition needs review.
+
+====================================================================
+6. PENDING WORK - READ THIS BEFORE CONTINUING
+====================================================================
+[ ] 1. VERIFY THE BEDROOM IN LIVE MODE.
+       Walk the room and test every station. There is no approval yet.
+       The code parses and the scene loads headless, but that is not a
+       gameplay test.
+
+[ ] 2. Netted Palang:
+       - Test hide prompt, teleport under the bed, camera height, E exit,
+         collision restore, and that the player cannot get stuck.
+       - Confirm Kamla loses the player while hidden and does not attack.
+       - Check the net-veil shader on the target GPU; check it hides on
+         exit and that the ghost silhouette fades correctly.
+       - Check the 3D net panels do not block the interaction ray.
+       - The bed's hide point is at world (24.55, 0.95, 2.02). The
+         inside position is (24.55, 0.14, 4.20).
+
+[ ] 3. Antique Almirah:
+       - Verify door hinge direction, clipping, and close animation.
+       - Verify 32 m noise spike appears on HUD and raises threat.
+       - Verify loot only gives one item per open and that inventory
+         labels show correctly.
+       - Verify weeping girl appears inside the dark wardrobe, not in
+         front of the doors, and disappears after about 4.8 seconds.
+       - The almirah is at (14.5, 0, -8.20); point is south of it.
+
+[ ] 4. Tarnished Mirror:
+       - Verify E starts the gaze and E while gazing ends it.
+       - Verify the palace _unhandled_input mirror-E path does not
+         immediately restart the gaze in the same frame.
+       - Verify the sandook code message and floor marks.
+       - Verify sanity drain only after 2 seconds, smile at 3.4 seconds,
+         force-break at about 8.2 seconds, and that the face hides after.
+       - Verify _mirror_face is visible from the west side of the mirror
+         and is not buried inside the wall.
+       - Mirror point: (25.18, 1.62, -5.4).
+
+[ ] 5. Iron-Bound Sandook:
+       - Verify A/D/W/S/Enter/Q input, selected-dial highlight, wrong-code
+         feedback, and successful lid animation.
+       - Verify player is frozen but still takes damage from behind.
+       - Verify GameManager/player state recovers after closing the UI.
+       - Verify the randomized code is readable in the mirror and that
+         the mirror message is not truncated.
+       - Chest: (21.9, 0, 6.55); point: (21.9, 0.92, 7.28).
+
+[ ] 6. Portrait Wall:
+       - Verify all four frame photo meshes are found under the children
+         named "Photograph".
+       - Test sanity thresholds manually; do not wait for a real chase.
+       - Verify frames stay visible when the photo disappears.
+       - Check the west-wall frames do not collide with the hall doorway
+         (door span is z 1.6..5.2 at x = HALL_XE = 11.15).
+
+[ ] 7. Brass Surahi:
+       - Verify stamina restore and HUD update.
+       - Verify taint is set while current_zone is "black_magic_room" and
+         decays afterward, and with cursed items.
+       - Verify stamina zero, exhaustion lockout, blur shader, and that
+         the blur layer hides after the timer.
+       - Surahi point: (24.55, 1.15, 1.90).
+
+[ ] 8. Lighting / composition:
+       - The bedroom still is very dark. Adjust only bedroom-local lamps,
+         not the overall Haveli art style.
+       - Render and review:
+         bedroomantique, bedroommirror, bedroomportraits, bedroomalmirah.
+       - Present all bedroom stills to the user for approval.
+       - No bedroom work is approved yet.
+
+[ ] 9. Bottle ritual verification:
+       - tests/ritual_probe.gd is still broken/incomplete: GameManager
+         must be looked up only after the SceneTree is active (after the
+         first process_frame awaits). The current probe fails before that.
+       - Verify both ritual failure and success paths in live play.
+       - Render preview/step1_palace_ritual.png with normal non-headless
+         Godot. Headless hangs at frame_post_draw on this PC.
+
+[ ] 10. Web export:
+       - Confirm export_presets.cfg and web export still work after the
+         bedroom changes.
+       - Test in a browser, not only by building files.
+
+[ ] 11. Windows standalone .exe:
+       - BLOCKED on this PC: Godot export templates are not installed.
+         C:\Users\Mani_Veera\AppData\Roaming\Godot\export_templates is
+         empty. Install Godot 4.7.2 export templates on the other PC,
+         then export the Windows build.
+       - Produce the standalone .exe only after the slice is approved.
+
+[ ] 12. Final checks:
+       - Use the uploaded cover art as the application icon (already set,
+         re-check on the new PC).
+       - "A GAME BY NISHANTH" only in a few main places.
+       - Nishanth plaque text:
+         "Nishanth - the one who killed the ghost."
+       - Do not change the low-poly flat-shaded art style, textures or
+         colors.
+       - Keep room centres open and walkable; furniture only at edges.
+       - Gods/idols only in the pooja temple.
+       - Ghost must never enter the pooja temple.
+       - Keep melancholia.mp3 looping.
+
+====================================================================
+7. FILES CHANGED IN THE LAST WORK SESSION
+====================================================================
+- tests/step1_duplex_palace.gd
+  Bedroom builders and state:
+  _palang, _net_quad, _antique_almirah, _vanity_clutter, _sandook,
+  _nightstand, _surahi, _build_mirror_marks, _build_bedroom_overlays,
+  _build_sandook_lock_ui, _update_bedroom, all bedroom callbacks.
+  New preview angles in _spawn_player:
+  bedroomantique, bedroommirror, bedroomportraits, bedroomalmirah.
+
+- player/player.gd
+  Added hiding state, hide enter/exit, scripted freeze, stamina restore/
+  drain helpers, hidden/frozen getters. Hiding disables collision and
+  movement; E exits.
+
+- enemies/enemy_ghost.gd
+  Hidden players are no longer sensed, chased, attacked or struck.
+
+- tests/step1_duplex.gd
+  _rich_photo_frame() now names the photo mesh "Photograph" so portrait-
+  wall disappearance can hide just the image, not the frame.
+
+- preview/step1_palace_bedroom.png
+  Only rendered bedroom still so far.
+
+- HANDOFF_TO_OTHER_PC.txt
+  This file.
+
+====================================================================
+8. KEY COORDINATES / STATE TO SAVE TIME
+====================================================================
+Palace bounds: X -26.7..26.7, Z -25.3..9.15
+Hall: X -11.15..11.15, Z -9.15..9.15, height 13.6
+Ground bedroom: X 11.15..26.7, Z -9.15..9.15
+Rear corridor: Z -13.3..-9.15
+Tantra room: X -12.7..-3.4, Z -25.3..-13.3
+Pooja room: X 3.4..12.7, Z -25.3..-13.3
+
+Ground bedroom stations:
+  Palang centre: (24.55, 0, 4.2)
+  Hide point: (24.55, 0.95, 2.02)
+  Hide inside: (24.55, 0.14, 4.20)
+  Almirah: (14.5, 0, -8.20)
+  Vanity mirror point: (25.18, 1.62, -5.4)
+  Sandook: (21.9, 0, 6.55)
+  Sandook point: (21.9, 0.92, 7.28)
+  Surahi / nightstand: (24.55, 0, 1.90)
+  Portrait wall: x=11.36, z=-7.2, -5.0, -2.8, -0.6
+
+Bedroom shaders are screen-space CanvasLayer shaders:
+  NetVeil layer 44
+  CorruptWaterBlur layer 46
+  SandookLock UI layer 72
+HUD is layer 100.
+
+====================================================================
+9. KNOWN RISKS / LIKELY BUGS
+====================================================================
+- The bedroom code was added fast and has not been played through.
+- `_update_bedroom()` runs in preview too; most overlays are hidden, but
+  confirm no state leaks into stills.
+- The new bedroom is still too dark in the only rendered still.
+- The net veil is full-screen and may feel too heavy or hide the HUD
+  context; tune alpha/distortion after seeing it live.
+- The mirror "smile" face is very close to the mirror glass; check for
+  z-fighting and whether it is inside the wall.
+- The sandook input uses raw physical keycodes; confirm it works on the
+  target keyboard layout.
+- `_tantra_taint` is set in _update_bedroom based on the current zone;
+  confirm zone updates actually fire while the player is in the tantra
+  room (parent _update_zone sets "black_magic_room").
+- Some stills/probes end with harmless ObjectDB/resource leak warnings.
+- The project is a Git repository; last changes are UNCOMMITTED. The ZIP
+  includes .git if it was created successfully, so commit/check history
+  after extracting.
+- The Google Drive upload was NOT possible from this PC. Upload the ZIP
+  manually.
+
+====================================================================
+10. ONE-LINE RESUME INSTRUCTION
+====================================================================
+Open the project on the new PC, run the live Haveli scene, walk into the
+east ground bedroom, test the Palang hide, Almirah, Mirror, Sandook,
+Portrait Wall and Surahi in that order, then fix the bedroom lighting and
+render the five bedroom preview angles for user approval before touching
+the bottle-ritual probe or the Windows export.

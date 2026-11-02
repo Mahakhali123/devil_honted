@@ -23,20 +23,43 @@ signal interact_prompt_changed(text: String)
 signal clue_found(clue_id: String)
 signal key_collected(key_id: String, label: String)
 signal weapons_changed(weapons: Array, equipped_index: int)
+signal inventory_changed(items: Dictionary)
 signal ghost_banished(ghost_name: String, remaining: int, quest_id: String)
 signal map_changed()
 signal enemy_hit(ghost_name: String, damage: float)
 signal objectives_changed(objectives: Array)
 
+# ---------------------------------------------------------------- haveli state
+signal game_state_changed(state: int)
+signal threat_changed(value: float, tag: String)
+signal zone_changed(zone_id: String)
+signal sanity_changed(value: float)
+signal player_hidden_changed(hidden: bool)
+
+## Haveli run states. Mirrors the architecture prompt's GameState enum.
+enum GameState {
+	MAIN_MENU,
+	CINEMATIC_INTRO,
+	EXPLORATION,
+	MONSTER_CHASE,
+	PUZZLE_VIEW,
+	RITUAL_ACTIVE,
+	PLAYER_DEAD,
+	GAME_COMPLETE,
+}
+
 # ---------------------------------------------------------------- levels
 const LEVELS := {
 	"stage1_village": "res://levels/stage1_village.tscn",
 	"stage2_barracks": "res://levels/stage2_barracks.tscn",
+	# Step 1 of the Haveli slice is built as a script-driven test scene.
+	"haveli_mansion": "res://tests/step1_duplex_palace.tscn",
 }
 
 const LEVEL_TITLES := {
 	"stage1_village": "The Abandoned Village",
 	"stage2_barracks": "The Haunted Barracks",
+	"haveli_mansion": "The Haveli of Kamla",
 }
 
 const MAIN_MENU_SCENE := "res://ui/main_menu.tscn"
@@ -51,6 +74,22 @@ var current_level_id := ""
 var is_paused := false
 var player_is_dead := false
 
+# ---------------------------------------------------------------- haveli state
+var game_state: int = GameState.MAIN_MENU
+## 0..100, rises from time, noise and ritual progress.
+var threat_level := 0.0
+## Room id the player is standing in (set by the level's zone watcher).
+var current_zone := ""
+## 0..100. Drains while Kamla is chasing you.
+var sanity := 100.0
+var player_hidden := false
+## Last noise the player made, for the HUD readout and debugging.
+var last_noise_radius := 0.0
+var last_noise_age := 99.0
+
+var _sanity_emitted := 100.0
+var _threat_tick := 0.0
+
 var player_health := 100.0
 var player_max_health := 100.0
 var interact_prompt_text := ""
@@ -62,12 +101,23 @@ var key_labels: Dictionary = {}
 ## Mirror of the player's weapons, kept here so the HUD can read them.
 var owned_weapons: Array = ["fists"]
 var equipped_weapon_index := 0
+## Ritual items the Haveli run is carrying. Each id maps to
+## {"label": String, "count": int}. The HUD prints this under CARRIED.
+var inventory: Dictionary = {}
 
 # ---------------------------------------------------------------- run stats
 var score := 0
 var ghosts_total := 0
 var ghosts_banished := 0
 var banished_by_type: Dictionary = {}
+
+# ---------------------------------------------------------------- checkpoint
+## Set by the everlasting diya in the Haveli's pooja room. A death restarts
+## the level at this position instead of the front gate.
+var checkpoint_valid := false
+var checkpoint_level := ""
+var checkpoint_position := Vector3.ZERO
+var checkpoint_yaw := 0.0
 
 # ---------------------------------------------------------------- map
 ## Top-down rectangles harvested from the level's LevelBlock nodes, used by
@@ -110,6 +160,7 @@ func _ready() -> void:
 	_register_default_input()
 	_build_overlay()
 	load_settings()
+	GameEventBroker.player_noise_made.connect(_on_player_noise)
 
 
 func _notification(what: int) -> void:
@@ -120,6 +171,7 @@ func _notification(what: int) -> void:
 func _process(delta: float) -> void:
 	_update_fade(delta)
 	_update_overlay_text(delta)
+	_update_haveli_state(delta)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -147,6 +199,7 @@ func _register_default_input() -> void:
 	_add_key_action("aim", KEY_NONE, MOUSE_BUTTON_RIGHT)
 	_add_key_action("lantern", KEY_F)
 	_add_key_action("heal", KEY_Q)
+	_add_key_action("ash_cloud", KEY_G)
 	_add_key_action("toggle_debug", KEY_F3)
 	for i in SLOT_KEYS.size():
 		_add_key_action("slot_%d" % (i + 1), SLOT_KEYS[i])
@@ -186,10 +239,18 @@ func start_level(level_id: String) -> void:
 	if not LEVELS.has(level_id):
 		push_error("GameManager: unknown level id '%s'" % level_id)
 		return
+	if checkpoint_valid and checkpoint_level != level_id:
+		clear_checkpoint()
 	await fade_to(1.0, 0.5)
 	is_paused = false
 	get_tree().paused = false
 	player_is_dead = false
+	game_state = GameState.EXPLORATION
+	player_hidden = false
+	current_zone = ""
+	sanity = 100.0
+	_sanity_emitted = 100.0
+	last_noise_age = 99.0
 	current_level_id = level_id
 	interact_prompt_text = ""
 	clear_map()
@@ -207,16 +268,36 @@ func start_level(level_id: String) -> void:
 
 
 func restart_level() -> void:
-	if current_level_id == "":
+	# Fall back to the village if a test scene forgot to register its id.
+	if current_level_id == "" or not LEVELS.has(current_level_id):
+		push_warning("GameManager: restarting from unknown level '%s', loading Stage 1 instead." % current_level_id)
 		start_level("stage1_village")
 	else:
 		start_level(current_level_id)
 
 
+## The everlasting diya calls this. The checkpoint survives a death restart
+## of the same level and is cleared when a different level begins.
+func set_checkpoint(pos: Vector3, yaw_deg := 0.0) -> void:
+	checkpoint_valid = true
+	checkpoint_level = current_level_id
+	checkpoint_position = pos
+	checkpoint_yaw = yaw_deg
+
+
+func clear_checkpoint() -> void:
+	checkpoint_valid = false
+	checkpoint_level = ""
+	checkpoint_position = Vector3.ZERO
+	checkpoint_yaw = 0.0
+
+
 func goto_main_menu() -> void:
 	is_paused = false
 	player_is_dead = false
+	clear_checkpoint()
 	current_level_id = ""
+	game_state = GameState.MAIN_MENU
 	get_tree().paused = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().change_scene_to_file(MAIN_MENU_SCENE)
@@ -264,7 +345,101 @@ func report_player_death() -> void:
 	is_paused = false
 	get_tree().paused = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	player_hidden = false
+	game_state = GameState.PLAYER_DEAD
+	game_state_changed.emit(game_state)
 	player_died.emit()
+
+
+# =========================================================================
+#  HAVELI STATE  (GameState, Threat, Zones, Sanity, Hidden)
+# =========================================================================
+func set_game_state(new_state: int) -> void:
+	if game_state == new_state:
+		return
+	game_state = new_state
+	if new_state == GameState.PLAYER_DEAD:
+		player_is_dead = true
+	if new_state == GameState.EXPLORATION:
+		player_is_dead = false
+	game_state_changed.emit(game_state)
+
+
+func set_threat(value: float) -> void:
+	var before := threat_level
+	threat_level = clampf(value, 0.0, 100.0)
+	if not is_equal_approx(before, threat_level):
+		threat_changed.emit(threat_level, threat_tag())
+
+
+func add_threat(amount: float) -> void:
+	set_threat(threat_level + amount)
+
+
+func threat_tag() -> String:
+	if threat_level < 20.0:
+		return "CALM"
+	if threat_level < 45.0:
+		return "UNEASY"
+	if threat_level < 70.0:
+		return "HUNTED"
+	if threat_level < 90.0:
+		return "PANIC"
+	return "DOOMED"
+
+
+func set_zone(zone_id: String) -> void:
+	if current_zone == zone_id:
+		return
+	current_zone = zone_id
+	zone_changed.emit(zone_id)
+	GameEventBroker.zone_entered.emit(zone_id)
+
+
+func set_sanity(value: float) -> void:
+	sanity = clampf(value, 0.0, 100.0)
+	if absf(sanity - _sanity_emitted) >= 0.5:
+		_sanity_emitted = sanity
+		sanity_changed.emit(sanity)
+		GameEventBroker.sanity_changed.emit(sanity)
+
+
+func add_sanity(amount: float) -> void:
+	set_sanity(sanity + amount)
+
+
+func set_player_hidden(hidden: bool, spot: Node = null) -> void:
+	if player_hidden == hidden:
+		return
+	player_hidden = hidden
+	player_hidden_changed.emit(hidden)
+	GameEventBroker.player_hidden_changed.emit(hidden, spot)
+
+
+func _on_player_noise(volume: float, _location: Vector3) -> void:
+	last_noise_radius = volume
+	last_noise_age = 0.0
+	add_threat(volume * 0.10)
+
+
+func _update_haveli_state(delta: float) -> void:
+	last_noise_age += delta
+	if game_state == GameState.EXPLORATION and current_level_id != "":
+		_threat_tick += delta
+		if _threat_tick >= 1.0:
+			_threat_tick = 0.0
+			add_threat(0.25)
+			_sanity_check_emit()
+	if game_state == GameState.MONSTER_CHASE:
+		set_sanity(sanity - 2.0 * delta)
+	else:
+		set_sanity(sanity + 1.0 * delta)
+
+
+func _sanity_check_emit() -> void:
+	if absf(sanity - _sanity_emitted) >= 0.5:
+		_sanity_emitted = sanity
+		sanity_changed.emit(sanity)
 
 
 func set_interact_prompt(text: String) -> void:
@@ -315,6 +490,53 @@ func has_key(key_id: String) -> bool:
 
 func key_display_name(key_id: String) -> String:
 	return String(key_labels.get(key_id, key_id))
+
+
+# =========================================================================
+#  RITUAL INVENTORY
+# =========================================================================
+func add_inventory_item(item_id: String, label := "", count := 1) -> void:
+	if item_id == "" or count <= 0:
+		return
+	if inventory.has(item_id):
+		var entry: Dictionary = inventory[item_id]
+		entry["count"] = int(entry.get("count", 0)) + count
+		if label != "":
+			entry["label"] = label
+	else:
+		inventory[item_id] = {
+			"label": label if label != "" else item_id,
+			"count": count,
+		}
+	inventory_changed.emit(inventory)
+
+
+func remove_inventory_item(item_id: String, count := 1) -> bool:
+	if not inventory.has(item_id):
+		return false
+	var entry: Dictionary = inventory[item_id]
+	var left := int(entry.get("count", 0)) - count
+	if left <= 0:
+		inventory.erase(item_id)
+	else:
+		entry["count"] = left
+	inventory_changed.emit(inventory)
+	return true
+
+
+func inventory_item_count(item_id: String) -> int:
+	if not inventory.has(item_id):
+		return 0
+	return int((inventory[item_id] as Dictionary).get("count", 0))
+
+
+func clear_inventory_items(item_ids: Array) -> void:
+	var changed := false
+	for id in item_ids:
+		if inventory.erase(String(id)):
+			changed = true
+	if changed:
+		inventory_changed.emit(inventory)
 
 
 # =========================================================================
@@ -434,6 +656,8 @@ func level_title() -> String:
 func reset_run_state() -> void:
 	keys.clear()
 	key_labels.clear()
+	inventory.clear()
+	inventory_changed.emit(inventory)
 	owned_weapons = ["fists"]
 	equipped_weapon_index = 0
 	score = 0
@@ -443,6 +667,17 @@ func reset_run_state() -> void:
 	objectives.clear()
 	objectives_changed.emit(objectives)
 	clear_map()
+	# Haveli run state.
+	threat_level = 0.0
+	sanity = 100.0
+	_sanity_emitted = 100.0
+	current_zone = ""
+	player_hidden = false
+	last_noise_radius = 0.0
+	last_noise_age = 99.0
+	game_state = GameState.MAIN_MENU
+	threat_changed.emit(threat_level, threat_tag())
+	sanity_changed.emit(sanity)
 
 
 # =========================================================================

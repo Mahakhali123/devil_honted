@@ -35,6 +35,7 @@ const DB_SWING := -8.0
 const DB_IMPACT := -7.0
 const DB_PICKUP := -6.0
 const DB_CLICK := -12.0
+const DB_BELL := -9.0
 
 var _footsteps: Array[AudioStreamWAV] = []
 var _land: AudioStreamWAV
@@ -45,6 +46,7 @@ var _whisper: AudioStreamWAV
 var _click: AudioStreamWAV
 var _swing: AudioStreamWAV
 var _impact: AudioStreamWAV
+var _bell: AudioStreamWAV
 
 var _rng := RandomNumberGenerator.new()
 var _pool: Array[AudioStreamPlayer3D] = []
@@ -115,6 +117,16 @@ func play_click() -> void:
 	_play_2d(_click, DB_CLICK)
 
 
+## A temple bell. Used by the pooja room's hanging ghanti row.
+func play_bell(pos: Vector3, pitch := 1.0) -> void:
+	_play_3d(_bell, pos, DB_BELL, pitch)
+
+
+## A softer, lower bell for distant warnings.
+func play_bell_distant(pos: Vector3, pitch := 1.0) -> void:
+	_play_3d(_bell, pos, DB_BELL - 6.0, pitch * 0.82)
+
+
 # =========================================================================
 #  INTERNAL PLAYBACK
 # =========================================================================
@@ -155,6 +167,7 @@ func _build_all_sounds() -> void:
 	_click = _make_click()
 	_swing = _make_swing()
 	_impact = _make_impact()
+	_bell = _make_bell()
 
 
 ## A short noise "tap" plus a low body thump = a believable footstep.
@@ -319,6 +332,29 @@ func _make_impact() -> AudioStreamWAV:
 		var body2 := sin(TAU * 71.0 * t) * 0.6 * exp(-15.0 * nt)
 		var crack := lp * 0.9 * exp(-40.0 * nt)
 		out[i] = body + body2 + crack
+	return _to_wav(out)
+
+
+## A cast brass temple bell: inharmonic partials with long, uneven decays.
+func _make_bell() -> AudioStreamWAV:
+	var dur := 2.45
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var f0 := 523.25
+	var ratios := [1.0, 2.01, 2.98, 4.21, 5.43]
+	var amps := [0.52, 0.27, 0.17, 0.095, 0.055]
+	for i in n:
+		var t := float(i) / float(RATE)
+		var s := 0.0
+		for k in ratios.size():
+			var f: float = f0 * float(ratios[k])
+			var env := exp(-t * (2.0 + float(k) * 0.85))
+			s += sin(TAU * f * t) * float(amps[k]) * env
+		# The hammer strike at the beginning.
+		if t < 0.025:
+			s += sin(TAU * 2600.0 * t) * (1.0 - t / 0.025) * 0.22
+		out[i] = s * 0.85
 	return _to_wav(out)
 
 
